@@ -1,0 +1,18 @@
+{
+  "about": "Pinned optional OCR engine for reading text from a retained campaign image. Runs fully on this computer; nothing is sent anywhere. Verified in the Phase A proof (docs/ocr-phase-a.md).",
+  "package": { "name": "tesseract.js", "version": "7.0.0", "license": "Apache-2.0", "source": "https://github.com/naptha/tesseract.js" },
+  "core": { "name": "tesseract.js-core", "version": "7.0.0", "license": "Apache-2.0" },
+  "oem": "LSTM_ONLY",
+  "language": {
+    "code": "eng",
+    "variant": "tessdata_fast (integer LSTM model)",
+    "license": "Apache-2.0",
+    "repository": "https://github.com/tesseract-ocr/tessdata_fast",
+    "commit": "923915d4ced2a7235221788285785a29c4a42d4a",
+    "file": "eng.traineddata",
+    "bytes": 4113088,
+    "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/923915d4ced2a7235221788285785a29c4a42d4a/eng.traineddata",
+    "note": "The float 'tessdata_best' model crashes this WASM core (missing DotProductSSE); only the integer model is supported."
+  }
+}

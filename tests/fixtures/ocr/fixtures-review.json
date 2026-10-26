@@ -1,0 +1,7 @@
+{
+  "about": "PREDECLARED before any OCR run, added for the review patch (m14b). Each image is rendered FROM its expected text. 'qualified-banner' is the CORRECTED ARTWORK for the 12-hour claim: every approved qualifier (the 'at medium brightness' condition) is actually printed in the pixels. 'consolas-30-hours' is an INDEPENDENT-STYLE monospace image of the wrong claim, rendered by us (it is not the reviewer's unseen file). Text is fictional.",
+  "fixtures": [
+    { "id": "qualified-banner", "kind": "corrected artwork: every approved qualifier printed", "width": 1320, "height": 300, "style": "font:600 40px/1.4 Arial,sans-serif;color:#111;background:#fff;padding:34px 40px", "html": "Aurora Lamp<br>A full charge lasts up to 12 hours at medium brightness.<br>Indoor use only.", "expected": "Aurora Lamp\nA full charge lasts up to 12 hours at medium brightness.\nIndoor use only.", "mustContain": ["Aurora Lamp", "up to 12 hours at medium brightness", "Indoor use only"], "numbers": ["12"] },
+    { "id": "consolas-30-hours", "kind": "monospace display of the wrong claim", "width": 1000, "height": 200, "style": "font:600 40px/1.4 Consolas,'Courier New',monospace;color:#111;background:#fff;padding:36px 40px", "html": "The battery lasts 30 hours<br>on a single charge.", "expected": "The battery lasts 30 hours\non a single charge.", "mustContain": ["30 hours"], "numbers": ["30"] }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "brandproof",
+  "version": "0.1.0",
+  "description": "BrandProof by bhangaledhruv7: local prototype of evidence-backed brand governance (demo mode).",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0 <23"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"tests/*.test.js\"",
+    "eval": "node scripts/eval-detection.js",
+    "eval:claims": "node scripts/eval-claims.js",
+    "fetch-model": "node scripts/fetch-model.js",
+    "fetch-ocr": "node scripts/fetch-ocr.js",
+    "verify-semantic": "node scripts/verify-semantic.js",
+    "ui-smoke": "node scripts/browser/ui-smoke.mjs",
+    "ui-smoke-auth": "node scripts/browser/ui-smoke-auth.mjs",
+    "ui-smoke-sources": "node scripts/browser/ui-smoke-sources.mjs",
+    "ui-smoke-assets": "node scripts/browser/ui-smoke-assets.mjs",
+    "ui-smoke-a11y": "node scripts/browser/ui-smoke-a11y.mjs",
+    "ui-smoke-claims": "node scripts/browser/ui-smoke-claims.mjs",
+    "ui-smoke-impact": "node scripts/browser/ui-smoke-impact.mjs",
+    "ui-smoke-dossier": "node scripts/browser/ui-smoke-dossier.mjs",
+    "ui-smoke-layout": "node scripts/browser/ui-smoke-layout.mjs",
+    "ui-smoke-design": "node scripts/browser/ui-smoke-design.mjs",
+    "ui-smoke-judge": "node scripts/browser/ui-smoke-judge.mjs",
+    "design-evidence": "node scripts/browser/design-evidence.mjs --tag after --out docs/evidence/design-after.json",
+    "ui-smoke-ocr": "node --require ./scripts/ocr-proof/block-network.cjs scripts/browser/ui-smoke-ocr.mjs && node scripts/browser/ui-smoke-ocr.mjs --unavailable",
+    "judge-rehearsal": "node scripts/browser/judge-rehearsal.mjs",
+    "ui-contrast": "node scripts/ui-contrast.mjs",
+    "demo:start": "node scripts/demo-server.mjs",
+    "demo:bootstrap": "node scripts/demo-server.mjs --bootstrap-only",
+    "demo:rehearse": "node scripts/demo/rehearse.mjs",
+    "demo:consequence": "node scripts/demo-consequence.mjs",
+    "demo:imagetext": "node scripts/demo-imagetext.mjs",
+    "auth:setup": "node scripts/auth-setup.js",
+    "package": "node scripts/package-source.mjs",
+    "package:public": "node scripts/package-public.mjs"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "3.8.1",
+    "tesseract.js": "7.0.0"
+  }
+}

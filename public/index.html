@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BrandProof</title>
+  <meta name="description" content="BrandProof by bhangaledhruv7: evidence-backed brand review before publication (demo mode).">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-mark" aria-hidden="true">B</div>
+        <div>
+          <div class="logo-name">BrandProof</div>
+          <div class="logo-sub">by bhangaledhruv7</div>
+        </div>
+      </div>
+      <nav class="nav" id="nav" aria-label="Primary"></nav>
+      <div class="sidebar-foot">Demo mode &middot; fictional brand<br>Codex 48 prototype</div>
+    </aside>
+    <div class="content">
+      <div class="demo-banner" role="note" id="banner"></div>
+      <header class="topbar">
+        <div class="grow"><div id="crumb" class="muted small"></div></div>
+        <div class="role-picker" id="role-picker">
+          <label for="role">Acting as</label>
+          <select id="role" aria-describedby="role-note"></select>
+          <span id="role-note" class="chip demo" title="Demo roles are a switch for the walkthrough. They are not sign-in.">demo role</span>
+        </div>
+        <div class="who" id="who" hidden></div>
+      </header>
+      <div id="judge-guide" class="judge-guide" hidden></div>
+      <main id="main" tabindex="-1" aria-live="polite"></main>
+    </div>
+  </div>
+  <div id="toasts" role="status" aria-live="polite"></div>
+  <div id="dialogs"></div>
+  <script type="module" src="/app.js"></script>
+  <noscript><p>BrandProof needs JavaScript to run.</p></noscript>
+</body>
+</html>

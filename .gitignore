@@ -1,0 +1,15 @@
+node_modules/
+data/
+demo-data/
+.cache/
+dist/
+*.tmp
+.env*
+*.bak-*
+
+# runtime ownership markers (one writer per data file); not user data, never committed or packaged
+*.json.lock
+*.json.lock.takeover
+
+# design tooling state (the Taste inspector writes here); the skills themselves live in .claude/skills
+.taste-skill/

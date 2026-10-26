@@ -1,0 +1,67 @@
+# Render Blueprint for a TEMPORARY, FICTIONAL BrandProof judge demo on a free Node web service. Exact steps, settings and limits: docs/render-deploy.md.
+#
+# Nothing in this file has been validated by Render or deployed: it was written from Render's documentation and checked only by the local tests
+# in tests/render-candidate.test.js. Using it needs a Render account and a repository the person chooses (docs/render-deploy.md, "Gates").
+#
+# Free-tier facts this design accepts (from Render's documentation, reviewed 26 Oct 2026): the service sleeps after 15 idle minutes and takes about
+# a minute to wake; local files are lost whenever it sleeps, restarts or redeploys; there is no free persistent disk. So demo sessions are TEMPORARY:
+# BRANDPROOF_JUDGE_EPHEMERAL=1 makes the page say so. No paid plan, disk or payment method is used or needed.
+services:
+  - type: web
+    name: brandproof-judge-demo
+    runtime: node
+    plan: free
+    # Deploys happen only when a person triggers them (Manual Deploy), never on a push.
+    autoDeploy: false
+    # The core profile has no runtime dependencies, so there is nothing to install or download. The step prints the pinned Node version into the
+    # build log. (To build with the optional OCR package instead, see docs/render-deploy.md, "Optional features".)
+    buildCommand: node --version && echo "BrandProof core profile: nothing to install"
+    startCommand: npm start
+    # Answered without a session, a cookie or a Host check, and reveals nothing (src/judge.js, /healthz).
+    healthCheckPath: /healthz
+    envVars:
+      # The Node version the code was tested on (also in .node-version and package.json "engines"). Render's default Node differs.
+      - key: NODE_VERSION
+        value: 22.19.0
+      # Opt-in deployment start-up: listens on 0.0.0.0 on exactly the PORT Render assigns (PORT is set by Render; do not set it here).
+      - key: BRANDPROOF_DEPLOY
+        value: "1"
+      # The isolated fictional judge demo: every visitor gets a separate fictional session, no sign-in, roles are a simulation.
+      - key: BRANDPROOF_JUDGE_DEMO
+        value: "1"
+      # A dedicated, disposable folder on temporary storage. The demo refuses any folder that already holds something else.
+      - key: BRANDPROOF_JUDGE_ROOT
+        value: /tmp/brandproof-judge-demo
+      # Tell the page (and the docs) that sessions are lost when the service sleeps, restarts or redeploys.
+      - key: BRANDPROOF_JUDGE_EPHEMERAL
+        value: "1"
+      # Secure __Host- session cookie (the platform serves https). The server refuses to start with this set and no host name below.
+      - key: BRANDPROOF_JUDGE_SECURE_COOKIE
+        value: "1"
+      # The EXACT public host name Render gives the service, for example brandproof-judge-demo.onrender.com (no scheme, no port, no wildcard).
+      # It is not known until the service exists, so it is entered by hand in the dashboard; see docs/render-deploy.md.
+      - key: BRANDPROOF_ALLOWED_HOSTS
+        sync: false
+      # Optional-feature profile "core": no text matching model (switched off, and it would need a download) and no OCR package (not installed).
+      # Both are reported as unavailable, with the reason, in the page; the core review path does not use them.
+      - key: BRANDPROOF_SEMANTIC
+        value: "off"
+      # Conservative limits for a free instance (512 MB memory, shared CPU, temporary disk).
+      - key: BRANDPROOF_JUDGE_MAX_SESSIONS
+        value: "30"
+      - key: BRANDPROOF_JUDGE_MAX_LIVE
+        value: "5"
+      - key: BRANDPROOF_JUDGE_IDLE_MINUTES
+        value: "60"
+      - key: BRANDPROOF_JUDGE_MAX_HOURS
+        value: "6"
+      - key: BRANDPROOF_JUDGE_NEW_PER_MINUTE
+        value: "10"
+      - key: BRANDPROOF_JUDGE_SESSION_KIB
+        value: "2048"
+      - key: BRANDPROOF_JUDGE_IMAGE_KIB
+        value: "1024"
+      - key: BRANDPROOF_JUDGE_IMAGE_COUNT
+        value: "3"
+      - key: BRANDPROOF_JUDGE_MAX_CONNECTIONS
+        value: "100"
