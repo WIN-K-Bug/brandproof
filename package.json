@@ -25,6 +25,7 @@
     "ui-smoke-dossier": "node scripts/browser/ui-smoke-dossier.mjs",
     "ui-smoke-layout": "node scripts/browser/ui-smoke-layout.mjs",
     "ui-smoke-design": "node scripts/browser/ui-smoke-design.mjs",
+    "ui-smoke-phone": "node scripts/browser/ui-smoke-phone.mjs",
     "ui-smoke-judge": "node scripts/browser/ui-smoke-judge.mjs",
     "design-evidence": "node scripts/browser/design-evidence.mjs --tag after --out docs/evidence/design-after.json",
     "ui-smoke-ocr": "node --require ./scripts/ocr-proof/block-network.cjs scripts/browser/ui-smoke-ocr.mjs && node scripts/browser/ui-smoke-ocr.mjs --unavailable",

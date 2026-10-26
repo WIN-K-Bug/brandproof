@@ -108,6 +108,19 @@ npm run ui-smoke-dossier
 
 Authenticated mode, synthetic accounts, fictional sheet, generated PNG, throwaway data. Recorded result: **25 of 25 checks passed** (details in [dossier.md](dossier.md#measured-synthetic-fictional-data-24-oct-2026)), including a real browser download compared with the visible report. Screenshots: `docs/evidence/dossier-1-report-top.png`, `dossier-2-decisions-and-findings.png`, `dossier-3-stale-approval.png`, `dossier-4-image-corrupt.png`, `dossier-5-print.png`, `dossier-6-narrow.png`.
 
+## 4a13. Phone recovery (m22)
+
+`npm run ui-smoke-phone` (`node scripts/browser/ui-smoke-phone.mjs`): 26 checks on the isolated judge demo with a movable clock (optional model and OCR off), Edge or Chrome, fictional data.
+
+A phone report said the banner, brand, role picker and guide looked clipped at 390x844. At default text size and zoom that was **not reproduced**: at 390, 360, 320, 300 and down to 240 px wide, at device scale 1, 2 and 3, on a fresh load, after a real-key role switch, and with the "session ended" and "earlier session had ended" banners, the page was never wider than the screen. What did reproduce once the text size was raised (a normal phone setting, equal to browser zoom): the workspace page became wider than the screen (a long no-wrap chip, and tab-bar labels and the count badge outgrowing their columns). Full-width bars stop at the screen edge while that wider content continues, which looks like clipped bars.
+
+Fixed in `public/styles.css`: chips and tags may not exceed their container and wrap on a phone; the tab-bar label and badge sizes are capped to their column. Second finding: an old deep link after a lost session showed only "No submission SUB-4."; it now also offers an "Open the workspace" button (announced as an alert, scrolled into view) in `public/workspace.js`.
+
+Checks cover 390 px at text 100, 125, 150 and 200%, 320 px at 100, 125 and 150%, the queue, sources and library pages at 150%, real-key role switching, the ended banners, and the recovery button.
+
+**Remaining limits, measured after the fix** (`handoffs/evidence/m22-after-fix-*`): 320 px at 200% text still scrolls sideways by 20 px (a claim card with a left offset, and the fifth tab); at 195 px wide (about 200% browser zoom on a 390 px phone) the workspace page is 23 px wider than the screen. Both are outside the asserted matrix and were left alone because only the confirmed, bounded fix was in scope. The native Brave DevTools "Fit to window" view was not available here, so the exact setting behind the report is unresolved.
+
+
 ## 4a12. Deployment candidate (m21)
 
 Render free-tier candidate: [render-deploy.md](render-deploy.md), `render.yaml`. Re-runnable: `node --test tests/judge-health.test.js tests/render-candidate.test.js tests/judge-startup.test.js` (the `/healthz` route allocates no session and reveals nothing; the exact `render.yaml` environment starts the real server; health, strict host and origin, the Secure `__Host-` cookie, two-visitor isolation and the core path through https-style headers, restart on the same and on a new empty folder, and the refused configurations) and `npm run package:public` (the clean public package, scanned, with hashes). Local only: **not** run on Render, Linux, a container or real TLS; `render.yaml` is not validated by Render. Details and the first-run logs are in the development handoff `m21-deployment-candidate.md`, which is not part of the public package.

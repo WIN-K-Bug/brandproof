@@ -50,6 +50,12 @@ export async function renderWorkspace(root, id, go) {
   try {
     view.detail = await api('GET', `/api/submissions/${encodeURIComponent(id)}`);
   } catch (e) {
+    // A submission that is not here (an address from an earlier session, or a restarted demo) must not be a dead end: say why it may be missing and offer the way back.
+    if (e.status === 404) {
+      clear(root).append(h('div', { class: 'notice err', role: 'alert' }, describeError(e)), h('p', { class: 'muted' }, 'This address may be from an earlier session, or the submission may have been removed.'), h('div', { class: 'row' }, h('a', { class: 'btn primary', href: '#/workspace' }, 'Open the workspace')));
+      root.scrollIntoView?.({ block: 'start' }); // on a phone the guide fills the first screen: bring the message and the way back into view
+      return;
+    }
     clear(root).append(h('div', { class: 'notice err' }, describeError(e)));
     return;
   }

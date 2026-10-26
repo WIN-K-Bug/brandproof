@@ -228,7 +228,7 @@ label { font-weight: 700; font-size: 0.9rem; }
 /* tags: square, ruled, set in the mono */
 .chip {
   display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; min-height: 1.65rem; border-radius: 0;
-  font: 700 0.75rem/1.2 var(--mono); letter-spacing: 0.02em; white-space: nowrap;
+  font: 700 0.75rem/1.2 var(--mono); letter-spacing: 0.02em; white-space: nowrap; max-width: 100%;
   background: var(--paper); color: var(--walnut); border: 2px solid var(--walnut);
 }
 .chip.draft { background: var(--paper); color: var(--walnut); }
@@ -428,7 +428,7 @@ details.group > summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
 .lib-item:last-child { border-bottom: 0; }
 .lib-item .head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .lib-item .head .mono { color: var(--walnut-2); font-weight: 700; }
-.tag { display: inline-block; font: 700 0.75rem/1.4 var(--mono); background: var(--paper); border: 2px solid var(--walnut); padding: 1px 7px; margin: 2px 4px 2px 0; }
+.tag { display: inline-block; max-width: 100%; overflow-wrap: anywhere; font: 700 0.75rem/1.4 var(--mono); background: var(--paper); border: 2px solid var(--walnut); padding: 1px 7px; margin: 2px 4px 2px 0; }
 .sticky-save { position: sticky; top: 0; z-index: 5; }
 
 /* ---------- dialog / toast ---------- */
@@ -483,6 +483,8 @@ main, .topbar, .demo-banner, dialog { overflow-wrap: break-word; }
   .flow { padding-top: 32px; }
   .flow .actions { gap: 12px; }
 }
+/* Phone: a long chip (for example "Metadata only: image not retained") wraps; it must never be the thing that makes the page wider than the screen. */
+@media (max-width: 600px) { .chip { white-space: normal; overflow-wrap: anywhere; } }
 /* Phone: the mark and the role on top, the work, and the five sections in a walnut tab bar at the thumb. */
 @media (max-width: 600px) {
   body { font-size: 1.0625rem; padding-bottom: calc(4.4rem + env(safe-area-inset-bottom, 0px)); }
@@ -502,7 +504,7 @@ main, .topbar, .demo-banner, dialog { overflow-wrap: break-word; }
   }
   .nav a {
     flex-direction: column; justify-content: center; gap: 4px; min-width: 0; min-height: 4.1rem; padding: 6px 2px;
-    border-right: 2px solid var(--walnut-2); color: var(--cream); font-size: 0.6875rem; font-weight: 700; line-height: 1.15;
+    border-right: 2px solid var(--walnut-2); color: var(--cream); font-size: min(0.6875rem, 3.4vw); font-weight: 700; line-height: 1.15;
     white-space: normal; text-align: center; overflow-wrap: normal;
   }
   .nav a:last-child { border-right: 0; }
@@ -511,7 +513,7 @@ main, .topbar, .demo-banner, dialog { overflow-wrap: break-word; }
   .nav a:focus-visible { outline-color: var(--focus-dark); outline-offset: -6px; }
   .nav a[aria-current="page"]:focus-visible { outline-color: var(--walnut); }
   .nav svg { display: block; }
-  .nav .count { position: absolute; top: 5px; left: calc(50% + 6px); min-width: 1.3rem; height: 1.3rem; padding: 0 3px; background: var(--amber); color: var(--walnut); border: 2px solid var(--cream); font-size: 0.6875rem; }
+  .nav .count { position: absolute; top: 5px; left: calc(50% + 6px); min-width: min(1.3rem, 6.2vw); height: min(1.3rem, 6.2vw); padding: 0 3px; background: var(--amber); color: var(--walnut); border: 2px solid var(--cream); font-size: min(0.6875rem, 3.4vw); }
   .nav a[aria-current="page"] .count { background: var(--walnut); color: var(--cream); }
   #toasts { right: 12px; left: 12px; max-width: none; bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
   /* a dialog becomes a sheet rising from the bottom edge */

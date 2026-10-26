@@ -70,6 +70,7 @@ Costs of the chosen design: each open session holds its workspace in memory (bou
 | Reopening the page after expiry, a tampered or unknown cookie | A **new** session is made (never the offered value); the strip says the earlier one had ended. |
 | Server restart or stop | Sessions are found again from the demo root and keep working until they expire; sessions that expired while it was stopped are removed on start. If the root is lost (an ephemeral disk), cookies are unknown and visitors get fresh sessions, with the notice. |
 | A hard stop (no graceful shutdown) | A runtime lock marker is left in the affected session folders. A stale marker inside the demo root is cleared when the session reopens (everything there belongs to this process). The demo root's own owner marker is handled as in [deployment.md](deployment.md): automatic on the same computer; a replacement container with a different computer name needs the manual step in that document (the path is in the error). Not tested on a container runtime. |
+| A bookmarked deep link (for example `#/workspace/SUB-4`) after a new session was made | The new session does not have that submission: the page says so and offers an "Open the workspace" button back to the seeded campaign (m22). |
 | Reset my demo | That session returns to the fictional seed. Others are untouched. |
 
 ## Bounds, and what a visitor sees at each
