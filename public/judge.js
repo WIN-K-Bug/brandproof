@@ -5,7 +5,7 @@
 // Wording rule: say what is true. Data typed here IS sent to the server that runs the demo and stored there; the demo keeps one visitor's
 // session separate from other visitors' sessions, but it does not hide it from whoever operates the server, and whoever holds a session's
 // cookie can act as that session. So the copy talks about separation and fictional data, and asks for nothing confidential.
-import { h, clear, api, state, openDialog, toast } from './ui.js';
+import { h, clear, api, state, openDialog, toast, roleLabel, describeError } from './ui.js';
 
 export const isJudge = () => Boolean(state.meta?.judge?.enabled);
 
@@ -33,6 +33,13 @@ export async function loadJudgeSession() {
     state.judge = await api('GET', '/api/judge/session');
   } catch {
     state.judge = null; // an ended session is reported through state.onSessionEnded by the API layer
+  }
+  if (state.judge) {
+    try {
+      state.scenario = await api('GET', '/api/judge/scenario'); // known before the first page is drawn, so the entry button is only shown while it can be used
+    } catch {
+      state.scenario = null;
+    }
   }
 }
 
@@ -77,6 +84,8 @@ export function paintGuide() {
     box.hidden = true;
     return;
   }
+  state.afterWrite = () => void refreshScenario(); // any saved change may move the scenario on (an approval, a published fact)
+  queueMicrotask(paintScenario); // the row is filled from the last answer the server gave (refreshScenario asks again)
   box.hidden = store.get();
   const wide = typeof matchMedia === 'function' && matchMedia('(min-width: 900px)').matches;
   const step = (label, hint) => h('li', null, h('strong', null, label), h('span', { class: 'jg-hint' }, hint));
@@ -96,6 +105,7 @@ export function paintGuide() {
           step('Record a decision', 'Request review, then act as Reviewer.'),
         ),
         h('p', { class: 'small jg-fiction' }, 'Fictional data only: do not enter confidential information.'),
+        h('div', { class: 'jg-scenario', id: 'jg-scenario' }),
         h(
           'details',
           { class: 'jg-more', open: wide },
@@ -112,6 +122,89 @@ export function paintGuide() {
       ),
     ),
   );
+}
+
+// ---------- the optional "evidence change" scenario ----------
+// A second, separate way through the demo (the three steps above are unchanged): a source changes after a campaign was approved. Starting it adds
+// a fictional source, a campaign approved against it and a pending new version to THIS session, through the real routes; the visitor then does
+// every step with the real features. The strip in the guide says where the visitor is, read from the server's stored state each time (never kept here).
+
+/** Ask the server where this session is in the scenario, then repaint its row. */
+export async function refreshScenario() {
+  if (!isJudge() || state.sessionEnded) return;
+  try {
+    state.scenario = await api('GET', '/api/judge/scenario');
+  } catch {
+    state.scenario = null;
+  }
+  paintScenario();
+}
+
+/** The optional entry, shown beside "New submission" in the workspace header while the scenario has not been started in this session. */
+export function scenarioEntry() {
+  if (!isJudge() || state.scenario?.started) return null;
+  return h('button', { class: 'btn', type: 'button', id: 'scenario-entry', title: 'Optional: a source changes after a campaign was approved. See what that does, then repair it. Fictional data.', onclick: openScenarioStart }, 'Try an evidence change');
+}
+
+function paintScenario() {
+  const box = document.getElementById('jg-scenario');
+  if (!box) return;
+  clear(box);
+  const s = state.scenario;
+  // Before it is started the entry is the "Try an evidence change" button beside "New submission" (scenarioEntry): the guide keeps the size it was
+  // accepted at. Once it is started, this strip says where the visitor is.
+  if (!s || !s.started) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const next = s.next;
+  const who = next?.role ? `Switch “Acting as” to ${roleLabel(next.role)}, then open it.` : null;
+  box.append(
+    h('div', { class: 'jg-scenario-text', role: 'group', 'aria-label': 'Evidence change: where you are' }, h('strong', null, 'Evidence change'), h('span', { class: 'jg-hint' }, s.headline), who ? h('span', { class: 'jg-hint jg-role' }, who) : null),
+    next?.action === 'start'
+      ? h('button', { class: 'btn small primary', type: 'button', onclick: () => startScenario() }, next.label)
+      : next
+        ? h('a', { class: 'btn small primary', href: next.hash }, next.label)
+        : null,
+  );
+}
+
+function openScenarioStart() {
+  openDialog({
+    title: 'Try an evidence change',
+    content: [
+      h('p', null, 'This adds, to your session only: one fictional fact sheet (version 1 approved, version 2 waiting), one sample campaign that was approved against version 1, and links three of the demo brand’s facts to that fact sheet (a new guidelines version). The approval you will see is sample history in the scenario, not a decision of yours.'),
+      h('p', null, 'Your own campaigns, comments and images are kept. Because the guidelines change, a campaign that was already approved (such as the sample newsletter blurb) will show “Re-review required”.'),
+      h('p', { class: 'small muted' }, 'Nothing is reset. “Reset my demo” removes everything, including this, at any time.'),
+    ],
+    actions: [
+      { label: 'Cancel', closes: true },
+      { label: 'Start the scenario', kind: 'primary', onClick: async (close) => (await startScenario(close)) },
+    ],
+  });
+}
+
+let starting = false;
+async function startScenario(close) {
+  if (starting) return false; // a double click is one request; the server also runs it once
+  starting = true;
+  try {
+    const r = await api('POST', '/api/judge/scenario', {});
+    state.scenario = r;
+    close?.();
+    paintScenario();
+    toast(r.created ? 'The scenario is ready: the sample campaign is approved on version 1.' : 'The scenario is already in your session.');
+    if (r.campaignId) location.hash = `#/workspace/${r.campaignId}`;
+    await refreshScenario();
+    return true;
+  } catch (e) {
+    toast(describeError(e), 'err');
+    await refreshScenario();
+    return false;
+  } finally {
+    starting = false;
+  }
 }
 
 function toggleGuide(hide) {

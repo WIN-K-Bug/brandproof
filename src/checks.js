@@ -215,21 +215,267 @@ function insideQuote(sentence, idx) {
   return straight || curly;
 }
 
+// ---------- applicability: whose claim is it, and is the sentence a claim at all? (m25) ----------
+// An approved fact was approved for ITS subject (here the Aurora Lamp). The first checks matched a topic word and a figure in one clause and nothing
+// else, so "Our phone battery lasts up to 12 hours" and "The office printer includes a 2-year warranty" were shown as SUPPORTED by lamp facts, and an
+// editing instruction ("Please delete the sentence: …lasts 30 hours") was rewritten as if it were a product claim. Two conservative gates now sit in
+// front of every verdict, and anything they cannot place goes to a person, never to green support and never to an automatic rewrite:
+//   1. SUBJECT (positive scope, m25b). A sentence is read as about the approved product only when its words say so (the product's name next to the claim,
+//      with nothing unknown between the name and the claim) or say nothing about any subject (every word is ordinary wording, claim-strength wording, a
+//      word of the fact itself or part of the brand or product name). Any other word in the subject position, whatever part of speech ("phone", "printer",
+//      "flaunt"), makes the subject unknown, and an unknown subject goes to a person. See unplacedIn and foreignSubject below.
+//   2. INTENT. A sentence that is an editing instruction ("delete the sentence", "this line should be removed"), or that disowns itself as an example,
+//      placeholder or fictional text, is not asserting the figure; replacing its number would change what the instruction says.
+// These are closed word classes and shapes, NOT language understanding and NOT a list of wrong nouns: the rule is "unknown subject → person". A
+// workspace that declares no product name (no naming rule besides the company) has no subject to compare with, so the subject gate stays off there.
+// What it costs and what it misses: docs/claims-scope.md ("Subject and intent", m25).
+const DETERMINERS = new Set(['the', 'a', 'an', 'this', 'that', 'these', 'those', 'our', 'your', 'their', 'its', 'my', 'his', 'her', 'each', 'every', 'any', 'another', 'some', 'all', 'both']);
+// Words that end a phrase but are never a subject: prepositions, conjunctions, pronouns, adverbs, auxiliaries.
+const PHRASE_BREAKS = new Set(`of for with without on in at by from to into onto over under per after before during up out off about around across than as inside within aboard through between among against near via
+  and or but so if while when then yet also just only now here there even still more most very really totally completely fully truly simply always never not no too quite almost nearly roughly approximately
+  we you they it i he she them us me him what which who whose where how why`.split(/\s+/u));
+// Common verbs that attach a figure to a subject ("<subject> lasts / includes / comes with / has …") and the usual marketing imperatives ("Enjoy up to …").
+const SUBJECT_VERBS = new Set(`is are was were be been being am isnt arent wasnt werent has have had having does do did doesnt dont didnt will would can could may might must should shall cannot cant wont
+  include includes included including come comes came coming carry carries carried offer offers offered provide provides provided deliver delivers delivered give gives gave given feature features featured
+  last lasts lasted lasting run runs ran running keep keeps kept cover covers covered backed backs back support supports get gets got use uses used enjoy enjoys expect expects experience experiences
+  power powers powered read reads work works boast boasts sport sports pack packs bring brings ships ship need needs go goes going went stay stays staying hold holds holding`.split(/\s+/u));
+// Ordinary descriptive and quantity words that say nothing about WHICH product a sentence is about.
+const NEUTRAL_WORDS = new Set(`new newest latest great good best better long longer short big small little full extra whole entire brand same own many much few single one two three first second next
+  hour hours hr hrs day days week weeks month months year years yr yrs minute minutes min mins second seconds time times limited
+  designed built made rated tested engineered ideal perfect suited`.split(/\s+/u));
+
+// Wording about HOW STRONGLY a figure is claimed (the guarantee, exactness, qualifier and hedge gates above already judge these): never a subject.
+const CLAIM_STRENGTH = new Set(`guarantee guaranteed guarantees guaranteeing promise promised promises promising ensure ensured ensures ensuring assured least minimum maximum exactly precisely
+  always consistently exact typically typical fail less more under below above over exceeding beyond max min about around approximately approx roughly nearly almost
+  might may could would should must possibly perhaps probably`.split(/\s+/u));
+
+const WORD = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
+/** Words of a phrase, lower-cased, possessive "'s" removed. `numeric` marks tokens that hold a digit ("12", "2-year", "100%"). */
+function wordsOf(text) {
+  const out = [];
+  for (const m of text.matchAll(WORD)) {
+    const raw = m[0].toLowerCase().replace(/['’]s$/u, '').replace(/['’]/gu, '');
+    out.push({ w: raw, numeric: /\p{N}/u.test(raw), at: m.index, end: m.index + m[0].length });
+  }
+  return out;
+}
+const hasWord = (set, w) => set.has(w) || w.split('-').every((p) => set.has(p));
+
+const factVocabulary = new WeakMap();
+/** The words an approved fact itself uses: its label, statement, source quote, topic, unit and condition words. */
+function vocabularyOf(f) {
+  let v = factVocabulary.get(f);
+  if (v) return v;
+  v = new Set();
+  const add = (s) => {
+    for (const x of wordsOf(String(s ?? ''))) for (const p of x.w.split('-')) if (p) v.add(p);
+  };
+  for (const s of [f.label, f.statement, f.source?.quote, ...(f.topicTerms ?? []), ...(f.unitAliases ?? []), ...(f.conditions ?? []), ...(f.conditionTerms ?? []), ...(f.confirmedBy ?? []), ...(f.contradictedBy ?? [])]) add(s);
+  factVocabulary.set(f, v);
+  return v;
+}
+
+const approvedSubjects = new WeakMap();
+/** What the approved data says the facts are ABOUT: product names (naming rules other than the company name) and the noun each ends in; brand words are known but name no product. */
+function subjectsOf(guidelines) {
+  let s = approvedSubjects.get(guidelines);
+  if (s) return s;
+  const brand = String(guidelines.brand?.name ?? '').trim();
+  const brandWords = new Set(wordsOf(brand).flatMap((x) => x.w.split('-')));
+  const phrases = [];
+  const heads = new Set();
+  for (const t of guidelines.terms ?? []) {
+    if (t.kind !== 'naming' || !t.preferred) continue;
+    if (t.preferred.trim().toLowerCase() === brand.toLowerCase()) continue; // the company is not a product
+    for (const p of [t.preferred, ...(t.avoid ?? []).map((a) => a.text)]) if (p) phrases.push(p);
+    const parts = wordsOf(t.preferred);
+    if (parts.length > 1) heads.add(parts.at(-1).w); // "Aurora Lamp" → "lamp"
+  }
+  const productWords = new Set(phrases.flatMap((p) => wordsOf(p).flatMap((x) => x.w.split('-'))));
+  const trust = [...phrases.map(phraseRegex), ...[...heads].map(phraseRegex)];
+  s = { active: phrases.length > 0, brandWords, productWords, trust, name: guidelines.terms?.find((t) => t.kind === 'naming' && t.preferred && t.preferred.trim().toLowerCase() !== brand.toLowerCase())?.preferred ?? 'the approved product' };
+  approvedSubjects.set(guidelines, s);
+  return s;
+}
+
+/**
+ * POSITIVE SCOPE (m25b). Which words of a stretch of the sentence are unaccounted for?
+ * A word is accounted for when it is ordinary wording (a determiner, preposition, conjunction, pronoun, adverb, auxiliary or one of the usual verbs that attach a
+ * figure to a subject, or an ordinary descriptive or quantity word), a word the approved fact itself uses, or part of the product's or the company's name.
+ * Anything else is UNKNOWN, whatever part of speech it is: an unfamiliar verb is as unknown as an unfamiliar noun ("Printers flaunt …").
+ * The product's name settles only the words it actually governs. A stretch that names the product is about the product when nothing unknown stands between the
+ * name and the claim, and only the words immediately before the name (up to its determiner) are excused as describing it ("our new reading lamp"). So the name
+ * never blesses a possessive phrase about something else ("Aurora Lamp owners' phone battery": "owners" and "phone" follow the name and are unknown).
+ */
+function unplacedIn(text, f, subj) {
+  const words = wordsOf(text);
+  const vocab = vocabularyOf(f);
+  const known = (w) => DETERMINERS.has(w) || PHRASE_BREAKS.has(w) || SUBJECT_VERBS.has(w) || CLAIM_STRENGTH.has(w) || hasWord(NEUTRAL_WORDS, w) || hasWord(vocab, w) || hasWord(subj.productWords, w) || hasWord(subj.brandWords, w);
+  const unknown = (x) => !x.numeric && !known(x.w);
+  let anchor = null; // the last place the product is named: { start, end } in characters
+  for (const re of subj.trust) {
+    re.lastIndex = 0; // the cached patterns are global: reset them, or .test()/.exec() would remember where the last text matched
+    for (const m of text.matchAll(re)) if (!anchor || m.index + m[0].length > anchor.end) anchor = { start: m.index, end: m.index + m[0].length };
+  }
+  if (!anchor) return words.filter(unknown).map((x) => x.w);
+  // the words right before the name, back to (and including) a determiner, describe the product; stop at anything that is not a modifier
+  let excusedFrom = anchor.start;
+  const before = words.filter((x) => x.end <= anchor.start);
+  for (let k = before.length - 1; k >= 0; k--) {
+    const x = before[k];
+    if (x.numeric || SUBJECT_VERBS.has(x.w) || (PHRASE_BREAKS.has(x.w) && !DETERMINERS.has(x.w))) break;
+    excusedFrom = x.at;
+    if (DETERMINERS.has(x.w)) break;
+  }
+  return words.filter((x) => unknown(x) && !(x.at >= excusedFrom && x.end <= anchor.start)).map((x) => x.w);
+}
+
+/** The noun phrase a topic term ends: walk back from `at` to its determiner (kept) or to a verb, a preposition or conjunction, or a figure (not kept). Returns the start offset. */
+function phraseStart(text, at) {
+  const lead = wordsOf(text.slice(0, at));
+  let start = at;
+  for (let k = lead.length - 1; k >= 0; k--) {
+    const x = lead[k];
+    if (x.numeric || SUBJECT_VERBS.has(x.w) || (PHRASE_BREAKS.has(x.w) && !DETERMINERS.has(x.w))) break;
+    start = x.at;
+    if (DETERMINERS.has(x.w)) break;
+  }
+  return start;
+}
+
+/**
+ * Does the sentence say, or leave open, that this fact is about something other than the approved product? Returns the unknown words or null.
+ * `before` is the clause text before the figure (or before the matched phrase), `after` the clause text after it, `topic(text)` finds the fact's first topic term
+ * ({ index, length }). Positive scope: the claim is read as about the approved product only if the words that stand for its subject name the product or are all
+ * accounted for (see unplacedIn). Which words stand for the subject:
+ *  - when the first topic term in `before` is itself a verb ("The Aurora Lamp lasts …") or is followed by a verb ("a full charge lasts …"), the phrase that term
+ *    ends, back to its determiner: whatever came before that belongs to another thought ("We tell readers a full charge lasts …");
+ *  - otherwise everything before the figure ("Printers flaunt a …", "The battery of the phone lasts …", "Phones flaunt battery life of …");
+ *  - plus, after the figure, the phrase around a topic noun ("12 hours of phone battery") and "on / in / for / from / inside / within / aboard the …" phrases.
+ */
+function foreignSubject({ f, subj, before, after = '', topic = null }) {
+  if (!subj.active) return null; // no declared product: nothing to compare with (legacy behaviour)
+  const found = (text) => {
+    const r = unplacedIn(text, f, subj);
+    return r.length ? [...new Set(r)] : null;
+  };
+  let lead = before;
+  const t = topic ? topic(before) : null;
+  if (t) {
+    const bw = wordsOf(before);
+    const next = bw.find((x) => x.at >= t.index + t.length);
+    const topicIsVerb = wordsOf(before.slice(t.index, t.index + t.length)).some((x) => SUBJECT_VERBS.has(x.w));
+    let npStart = -1;
+    if (topicIsVerb) {
+      npStart = phraseStart(before, t.index);
+      lead = before.slice(npStart, t.index);
+    } else if (next && SUBJECT_VERBS.has(next.w)) {
+      npStart = phraseStart(before, t.index);
+      lead = before.slice(npStart, t.index + t.length);
+    }
+    if (npStart >= 0) {
+      // What came before the claim's own phrase belongs to another thought, except a prepositional adjunct right in front of it ("On the brightest setting | a full
+      // charge lasts …"): that states where or when the claim holds, so its words must be accounted for too.
+      const pre = wordsOf(before.slice(0, npStart));
+      let from = -1;
+      for (let k = pre.length - 1; k >= 0; k--) {
+        const x = pre[k];
+        if (['and', 'or', 'but', 'so', 'if', 'when', 'while'].includes(x.w) || SUBJECT_VERBS.has(x.w) || x.numeric) break;
+        if (['on', 'in', 'under', 'at', 'with', 'during', 'using', 'for', 'from', 'inside', 'within'].includes(x.w)) {
+          from = k;
+          break;
+        }
+      }
+      if (from > 0) {
+        lead = before; // the preposition hangs on words before it ("Phone cases for | Aurora Lamp battery lasts"): the subject is among them, so the whole lead counts
+      } else if (from === 0 && pre[from].end <= npStart) {
+        const adjunct = found(before.slice(pre[from].end, npStart)); // a clause-initial adjunct ("On the brightest setting | a full charge lasts …")
+        if (adjunct) return adjunct;
+      }
+    }
+  }
+  let hit = found(lead);
+  if (hit) return hit;
+  const t2 = topic ? topic(after) : null;
+  if (t2) {
+    hit = found(after.slice(phraseStart(after, t2.index), t2.index + t2.length));
+    if (hit) return hit;
+  }
+  const pp = /(?<![\p{L}\p{N}_])(?:on|in|for|from|inside|within|aboard)\s+(?:the|a|an|our|your|their|this|that|its)\s+[\p{L}'’-]+(?:\s+[\p{L}'’-]+){0,3}/giu;
+  for (const m of after.matchAll(pp)) {
+    const words = wordsOf(m[0]).slice(1);
+    const run = [];
+    for (const x of words) {
+      if (x.numeric || SUBJECT_VERBS.has(x.w) || (PHRASE_BREAKS.has(x.w) && !DETERMINERS.has(x.w))) break;
+      run.push(x.w);
+    }
+    hit = found(run.join(' '));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+const firstTopicAt = (f, text) => {
+  let best = null;
+  for (const term of f.topicTerms ?? []) {
+    const m = phraseRegex(term).exec(text);
+    if (m && (!best || m.index < best.index)) best = { index: m.index, length: m[0].length };
+  }
+  return best;
+};
+
+/** The two gates for a boolean fact's phrase: a note about the text, or an explicit subject the approved data does not know. Returns { why, detail } or null. */
+function unsureWhose({ f, subj, s, previous, clauseText, at, length }) {
+  if (isEditingNote(s.text, previous)) return { why: 'editing' };
+  const foreign = foreignSubject({ f, subj, before: clauseText.slice(0, at), after: clauseText.slice(at + length) });
+  return foreign ? { why: 'other-subject', detail: foreign } : null;
+}
+
+const TEXT_OBJECT = '(?:sentences?|claims?|lines?|text|copy|figures?|numbers?|statements?|paragraphs?|wording|phrases?|headlines?|slogans?|captions?|bullets?|passages?|quotes?|specs?|specifications?|stats?|content|blurb|banner|draft)';
+const EDIT_VERB = '(?:delet(?:e|es|ed|ing)|remov(?:e|es|ed|ing)|omit(?:s|ted|ting)?|drop(?:s|ped|ping)?|cut(?:s|ting)?|strik(?:e|es|ing)|struck|eras(?:e|es|ed|ing)|redact(?:s|ed|ing)?|exclud(?:e|es|ed|ing)|leav(?:e|es|ing)\\s+out|left\\s+out|tak(?:e|es|ing)\\s+out|taken\\s+out|scrap(?:s|ped|ping)?|rewrit(?:e|es|ing|ten)|rewrote|revis(?:e|es|ed|ing)|reword(?:s|ed|ing)?|rephras(?:e|es|ed|ing)|edit(?:s|ed|ing)?|fix(?:es|ed|ing)?|correct(?:s|ed|ing)?|amend(?:s|ed|ing)?|chang(?:e|es|ed|ing)|updat(?:e|es|ed|ing)|replac(?:e|es|ed|ing)|substitut(?:e|es|ed|ing)|flag(?:s|ged|ging)?|highlight(?:s|ed|ing)?)';
+// "delete the sentence", "please remove this claim", "replace the number" (an instruction aimed at a piece of text) …
+const EDIT_INSTRUCTION = new RegExp(`${BEFORE}${EDIT_VERB}${AFTER}[^.!?]{0,50}?${BEFORE}${TEXT_OBJECT}${AFTER}`, 'iu');
+// … and "this line should be removed", "the figure needs to be corrected".
+const EDIT_PASSIVE = new RegExp(`${BEFORE}${TEXT_OBJECT}${AFTER}[^.!?]{0,30}?${BEFORE}(?:should|must|needs?\\s+to|has\\s+to|have\\s+to|is\\s+to|ought\\s+to|to|will|can|could)\\s+(?:also\\s+)?be\\s+(?:deleted|removed|omitted|dropped|cut|struck|erased|redacted|excluded|scrapped|rewritten|revised|reworded|rephrased|edited|fixed|corrected|amended|changed|updated|replaced|flagged|left\\s+out|taken\\s+out)${AFTER}`, 'iu');
+// A sentence that says it is not a real claim: an example, a placeholder, fictional or made-up text.
+const DISOWNED = new RegExp(`${BEFORE}(?:fictional|fictitious|placeholder|dummy|lorem|hypothetical|made[\\s-]up|not\\s+real|(?:sample|example|test|draft|mock|fake)\\s+${TEXT_OBJECT})${AFTER}`, 'iu');
+const POINTS_FORWARD = /(?<![\p{L}\p{N}_])(?:next|following|below|after|here|this one|that one|the one)(?![\p{L}\p{N}_])/iu;
+
+/** Is this sentence a note or instruction about the text rather than a statement of the claim? `previous` is the sentence before it (an instruction may point forward). */
+function isEditingNote(sentence, previous = '') {
+  if (EDIT_INSTRUCTION.test(sentence) || EDIT_PASSIVE.test(sentence) || DISOWNED.test(sentence)) return true;
+  return Boolean(previous) && EDIT_INSTRUCTION.test(previous) && POINTS_FORWARD.test(previous);
+}
+
+// Wording that describes how long a product lasts WITHOUT a figure ("continuously", "all day", "until midnight", "without needing a charge"). An approved
+// "up to N hours" fact does not cover any of these, and no figure is there to compare, so it goes to a person. A short closed list for duration facts
+// only (bounded coverage, not a paraphrase detector): other ways of saying it are still missed. See docs/claims-scope.md.
+const ENDURANCE = new RegExp(
+  `${BEFORE}(?:continuous(?:ly)?|non-?stop|round\\s+the\\s+clock|all\\s+day|all\\s+night|all\\s+week|day\\s+and\\s+night|days\\s+on\\s+end|forever|endless(?:ly)?|never\\s+(?:runs?\\s+out|dies|needs?\\s+(?:a\\s+)?(?:re)?charg\\w*)|without\\s+(?:ever\\s+)?(?:needing|requiring|having\\s+to\\s+(?:re)?charge|a\\s+(?:re)?charge)(?:\\s+(?:a\\s+|an\\s+)?(?:re)?charg\\w*)?|without\\s+(?:re)?charging|(?:until|till)\\s+(?:midnight|morning|evening|night|bedtime|dawn|dusk|sunrise|sunset)|from\\s+\\p{L}+\\s+(?:until|till|to)\\s+(?:midnight|morning|evening|night|bedtime|dawn|dusk|sunrise|sunset))${AFTER}`,
+  'iu',
+);
+const isDuration = (f) => (f.unitAliases ?? []).some((u) => /^(?:hours?|hrs?|h|minutes?|mins?|days?|weeks?|months?)$/iu.test(u));
+
 /**
  * Decide what one figure in one clause can honestly be called, against one numeric fact.
  * Returns { verdict: 'supported' | 'contradicted' | 'review', why?, fix?: 'replace' | 'advice', note? }.
  */
-function judgeFigure({ f, c, m, s, clauses, ci, n, kind, rest }) {
+function judgeFigure({ f, c, m, s, clauses, ci, n, kind, rest, subj, previous }) {
   const clause = c.text;
   const figureAt = c.start - s.start + m.index;
   if (isNegated(rest)) return { verdict: 'review', why: 'negated' };
   if (OTHER_SUBJECT.test(clause)) return { verdict: 'review', why: 'subject' };
+  // A note or instruction about the text is not a claim: never judged as one, never rewritten (its number is not ours to replace).
+  if (isEditingNote(s.text, previous)) return { verdict: 'review', why: 'editing' };
   // Attribution is looked for in the three clauses before the figure, its own clause and the next one, and inside quotation marks.
   const nearby = clauses.slice(Math.max(0, ci - 3), ci + 2).map((x) => x.text).join(' ');
   if (ATTRIBUTION.test(nearby) || insideQuote(s.text, figureAt)) return { verdict: 'review', why: 'attributed' };
   // A denied or retired claim is judged by a person, whatever the figure is: never supported, never rewritten.
   const lead = `${clauses[ci - 1]?.text ?? ''} ${clause.slice(0, m.index)}`;
   if (DENIED_DIRECTIVE.test(lead) || RETIRED_FIGURE.test(s.text)) return { verdict: 'review', why: 'denied' };
+  // Whose figure is it? An explicit subject the approved data does not know goes to a person, not to support, contradiction or a rewrite.
+  const foreign = foreignSubject({ f, subj, before: rest, after: clause.slice(m.index + m[0].length), topic: (t) => firstTopicAt(f, t) });
+  if (foreign) return { verdict: 'review', why: 'other-subject', detail: foreign };
 
   const guarantee = GUARANTEE.test(clause);
   const exactWord = EXACT_WORD.test(clause);
@@ -287,9 +533,12 @@ const REVIEW_WHY = {
   subject: 'the sentence appears to be about something other than the approved product (a competitor, other brands or a comparison)',
   attributed: 'the figure is quoted or attributed to someone else',
   denied: 'the sentence appears to tell people NOT to make this claim, or to say the figure is old, retired or wrong',
+  editing: 'the sentence appears to be an instruction or a note about the text (for example “delete the sentence”, or an example or placeholder), not a claim',
+  'other-subject': (words) => `the sentence appears to be about something the approved fact does not mention (${words.map((w) => `“${w}”`).join(', ')}), not about the approved product`,
+  unquantified: 'the sentence describes how long the product lasts without a figure the approved fact can be compared with',
 };
 
-function reviewAdvice(f, why) {
+function reviewAdvice(f, why, detail, subj) {
   const cond = Array.isArray(f.conditions) && f.conditions[0];
   switch (why) {
     case 'guarantee':
@@ -301,6 +550,12 @@ function reviewAdvice(f, why) {
       return 'Check whose figure this is. An approved fact about our product cannot confirm or correct another subject’s figure, so nothing is rewritten automatically.';
     case 'denied':
       return `Nothing is rewritten automatically: replacing the figure could reverse what the sentence says (for example turn “Do not advertise 30 hours” into “Do not advertise up to 12 hours”). Read the sentence yourself. The approved fact is: “${f.statement}”`;
+    case 'other-subject':
+      return `Check what this sentence is about. The approved fact is about ${subj?.name ?? 'the approved product'}; it cannot confirm or correct a claim about ${(detail ?? []).map((w) => `“${w}”`).join(', ')}. If the sentence is about our product, say so; if it is about something else, it needs its own approved fact. Nothing is rewritten automatically.`;
+    case 'editing':
+      return `Nothing is rewritten automatically: the sentence reads as an instruction or a note about the text (for example “delete the sentence”), and replacing its figure could change what it says. Read it yourself and carry out the instruction if that is what it is. The approved fact is: “${f.statement}”`;
+    case 'unquantified':
+      return `A person should check what is promised. The approved fact is “${f.statement}”; it does not say the product lasts continuously or without recharging. Restate it with the approved “up to” figure and conditions, or ask a manager for an approved fact that supports it. Nothing is rewritten automatically.`;
     case 'attributed':
       return 'Check who said it. A quoted or attributed figure is not a claim about our product unless the copy adopts it, so nothing is rewritten automatically.';
     default:
@@ -308,7 +563,7 @@ function reviewAdvice(f, why) {
   }
 }
 
-function reviewFinding(f, span, quote, why) {
+function reviewFinding(f, span, quote, why, detail, subj) {
   return mk({
     field: 'text',
     ruleId: f.id,
@@ -316,27 +571,31 @@ function reviewFinding(f, span, quote, why) {
     status: 'needs_review',
     severity: 'warning',
     title: `Needs review: ${f.label}`,
-    explanation: `“${quote}” may relate to the approved fact “${f.statement}”, but ${REVIEW_WHY[why]}, so BrandProof cannot tell whether it matches. This is not a finding that the copy is wrong.`,
+    explanation: `“${quote}” may relate to the approved fact “${f.statement}”, but ${typeof REVIEW_WHY[why] === 'function' ? REVIEW_WHY[why](detail) : REVIEW_WHY[why]}, so BrandProof cannot tell whether it matches. This is not a finding that the copy is wrong.`,
     span,
     quote,
     source: f.source,
     evidence: factEvidence(f, 'possibly-related-fact'),
-    correction: { type: 'advice', text: reviewAdvice(f, why) },
+    correction: { type: 'advice', text: reviewAdvice(f, why, detail, subj) },
   });
 }
 
 function checkFactsAndClaims(text, guidelines, out) {
   const { facts, claims } = guidelines;
+  const subj = subjectsOf(guidelines);
   const covered = []; // spans already accounted for by a fact; only signals inside them are suppressed
   const overlaps = (m, off) => covered.some((c) => m.index + off < c.end && m.index + off + m[0].length > c.start);
 
-  for (const s of splitSentences(text)) {
+  const sentences = splitSentences(text);
+  for (const [si, s] of sentences.entries()) {
     const clauses = splitClauses(s);
+    const previous = sentences[si - 1]?.text ?? '';
 
     for (const f of facts) {
       if (f.type === 'numeric') {
         const topicIn = (t) => f.topicTerms.some((term) => phraseRegex(term).test(t));
         const sentenceHasTopic = topicIn(s.text);
+        const judgedBefore = covered.length;
         for (const [ci, c] of clauses.entries()) {
           for (const m of matches(numberUnitRegex(f.unitAliases), c.text)) {
             const span = spanOf(m, c.start);
@@ -351,9 +610,9 @@ function checkFactsAndClaims(text, guidelines, out) {
             covered.push(span);
             const { kind, rest } = qualifierOf(c.text.slice(0, m.index));
             const n = parseNumber(m[1]);
-            const j = judgeFigure({ f, c, m, s, clauses, ci, n, kind, rest });
+            const j = judgeFigure({ f, c, m, s, clauses, ci, n, kind, rest, subj, previous });
             if (j.verdict === 'review') {
-              out.push(reviewFinding(f, span, quote, j.why));
+              out.push(reviewFinding(f, span, quote, j.why, j.detail, subj));
             } else if (j.verdict === 'supported') {
               out.push(
                 mk({
@@ -405,6 +664,20 @@ function checkFactsAndClaims(text, guidelines, out) {
             }
           }
         }
+        // No figure here was compared with this fact: wording that promises endurance without one is still not green (bounded list, duration facts only).
+        // The topic must be a noun of the fact ("battery", "charge"), not one of its verbs ("lasts"): "The party lasts all night" is not about the battery.
+        const topicNoun = f.topicTerms.some((term) => !wordsOf(term).some((x) => SUBJECT_VERBS.has(x.w)) && phraseRegex(term).test(s.text));
+        if (covered.length === judgedBefore && isDuration(f)) {
+          for (const c of clauses) {
+            if (!topicNoun) break;
+            const e = ENDURANCE.exec(c.text);
+            if (!e) continue;
+            const span = { start: c.start + e.index, end: c.start + e.index + e[0].length };
+            covered.push(span);
+            out.push(reviewFinding(f, span, e[0], 'unquantified', undefined, subj));
+            break;
+          }
+        }
       } else {
         for (const c of clauses) {
           for (const phrase of f.contradictedBy) {
@@ -412,6 +685,11 @@ function checkFactsAndClaims(text, guidelines, out) {
               const span = spanOf(m, c.start);
               covered.push(span);
               if (isNegated(c.text.slice(0, m.index))) continue; // "not waterproof" agrees with the fact
+              const unsure = unsureWhose({ f, subj, s, previous, clauseText: c.text, at: m.index, length: m[0].length });
+              if (unsure) {
+                out.push(reviewFinding(f, span, m[0], unsure.why, unsure.detail, subj));
+                continue;
+              }
               out.push(
                 mk({
                   field: 'text',
@@ -436,6 +714,11 @@ function checkFactsAndClaims(text, guidelines, out) {
               covered.push(span);
               if (isNegated(c.text.slice(0, m.index))) {
                 out.push(reviewFinding(f, span, m[0], 'negated-confirmation'));
+                continue;
+              }
+              const unsure = unsureWhose({ f, subj, s, previous, clauseText: c.text, at: m.index, length: m[0].length });
+              if (unsure) {
+                out.push(reviewFinding(f, span, m[0], unsure.why, unsure.detail, subj));
                 continue;
               }
               out.push(
@@ -593,7 +876,7 @@ export function summarize(findings) {
  * A hand-maintained label for the rules in this file. It is bumped by the authors when the rules change in a way that can
  * change findings. It is NOT derived from the code, is not a build identity or a signature, and a forgotten bump is possible.
  */
-export const CHECKER_REVISION = 'rules-2026.10.25-image-text';
+export const CHECKER_REVISION = 'rules-2026.10.28-positive-scope';
 
 export const IMAGE_TEXT_RULE = 'Match the words actually printed. Editing this transcript does not change the image. To fix a claim in the artwork, replace the image, then transcribe and confirm again.';
 

@@ -266,7 +266,9 @@ test('through the API: a denied claim is a caution with no replacement, and the 
 });
 
 test('gate is bounded: wording outside the lists is still judged as an ordinary claim (documented limit, not a general-NLP claim)', () => {
-  const t = 'We have moved on from the 30 hours battery number.';
+  // (m25b: "We have moved on from the 30 hours battery number." used to be the example here; its unfamiliar verb now sends it to a person, so another
+  // documented limit from the same corpus shows the lists are still bounded.)
+  const t = 'A battery that lasts 30 hours was never true.';
   assert.equal(only(t).status, 'contradicted', 'not detected as retired: the limit is real');
   assert.equal(only(t).correction.type, 'replace');
 });

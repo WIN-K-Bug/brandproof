@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { EventEmitter } from 'node:events';
+import { Readable } from 'node:stream';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -765,11 +767,54 @@ export async function createApp({ dataFile, clock = () => new Date().toISOString
   });
   if (semantic === undefined) sem.warm();
 
+  /**
+   * Send ONE request to this app's own handler without a network socket (the judge demo's scenario setup uses it). It goes through the very same
+   * route table, role checks, validation and workspace rules as a request over HTTP; nothing is bypassed. Demo mode only (it carries a demo role).
+   */
+  async function inject({ method = 'GET', url, role, body, raw = false }) {
+    if (authed) throw new Error('inject is for demo-mode apps.');
+    const headers = { host: '127.0.0.1' };
+    if (role) headers['x-demo-role'] = role;
+    let payload = null;
+    if (raw) {
+      payload = Buffer.from(body);
+      headers['content-type'] = 'application/octet-stream';
+    } else if (body !== undefined) {
+      payload = Buffer.from(JSON.stringify(body));
+      headers['content-type'] = 'application/json';
+    }
+    if (payload) headers['content-length'] = String(payload.length);
+    const req = Object.assign(Readable.from(payload ? [payload] : []), { method, url, headers, socket: { remoteAddress: '127.0.0.1' } });
+    const out = { status: 200, chunks: [] };
+    const res = Object.assign(new EventEmitter(), {
+      writableEnded: false,
+      headersSent: false,
+      setHeader() {},
+      writeHead(status) {
+        out.status = status;
+        res.headersSent = true;
+      },
+      end(data) {
+        if (data !== undefined) out.chunks.push(Buffer.from(data));
+        res.writableEnded = true;
+        res.emit('close');
+      },
+    });
+    await handle(req, res);
+    const text = Buffer.concat(out.chunks).toString('utf8');
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch {}
+    return { status: out.status, json, text };
+  }
+
   return {
     server,
     store,
     auth,
     mode,
+    inject,
     /** Listen on `wantedPort` (0 = any free port) at `host`. Loopback (127.0.0.1) is the default and what everything local uses. */
     listen(wantedPort = 0, host = '127.0.0.1') {
       return new Promise((resolve, reject) => {

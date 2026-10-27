@@ -6,7 +6,7 @@ import { renderInsights } from './insights.js';
 import { renderPeople } from './people.js';
 import { renderSources } from './sources.js';
 import { renderDossier } from './dossier.js';
-import { isJudge, loadJudgeSession, judgeBanner, judgeAboutLines, paintGuide, showSessionEnded } from './judge.js';
+import { isJudge, loadJudgeSession, judgeBanner, judgeAboutLines, paintGuide, showSessionEnded, refreshScenario } from './judge.js';
 
 const BASE_PAGES = [
   ['workspace', 'Workspace'],
@@ -64,6 +64,7 @@ async function route(opts = {}) {
     else await renderInsights(main);
     // After navigating, put focus on the new page's heading so keyboard and screen-reader users start at the top of the content.
     if (opts.focus && token === renderToken) focusMainHeading();
+    if (isJudge() && token === renderToken) void refreshScenario(); // where the optional evidence-change scenario stands, from the stored state
   } catch (e) {
     if (token !== renderToken) return;
     if (state.sessionEnded) return; // the judge demo already replaced the page with its "session ended" state

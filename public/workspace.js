@@ -1,4 +1,5 @@
 import { h, clear, api, apiUpload, focusMainHeading, tabList, describeError, toast, openDialog, fmtTime, short, statusChip, findingChip, roleLabel, roleChip, isAuthed, field, debounce, sha256Hex, state, STATUS_LABEL } from './ui.js';
+import { scenarioEntry } from './judge.js';
 
 const switchHint = (what) => (isAuthed() ? `Your role cannot ${what}.` : `Switch to the Creator or Manager demo role to ${what}.`);
 
@@ -98,7 +99,7 @@ function header() {
   return h(
     'div',
     { class: 'ws-head' },
-    h('div', { class: 'row between' }, h('div', { class: 'row' }, h('label', { class: 'sr-only', for: 'x' }, 'Submission'), picker), h('div', { class: 'row' }, h('a', { class: 'btn', href: `#/dossier/${encodeURIComponent(d.id)}`, title: 'A readable, printable record of this campaign, with a JSON download' }, 'Review dossier'), newButton())),
+    h('div', { class: 'row between' }, h('div', { class: 'row' }, h('label', { class: 'sr-only', for: 'x' }, 'Submission'), picker), h('div', { class: 'row' }, h('a', { class: 'btn', href: `#/dossier/${encodeURIComponent(d.id)}`, title: 'A readable, printable record of this campaign, with a JSON download' }, 'Review dossier'), scenarioEntry(), newButton())),
     h(
       'div',
       { class: 'ws-title' },

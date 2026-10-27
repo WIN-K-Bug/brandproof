@@ -83,7 +83,7 @@ try {
     must(await reviewer.call('POST', `/api/submissions/${made.id}/approve`, { revision: 1, expected: seen.workflow.binding }));
     return made.id;
   };
-  const A = await approve(EVIL_TITLE, 'A full charge lasts up to 12 hours. <script>alert(2)</script> Indoor use only.', asset);
+  const A = await approve(EVIL_TITLE, 'A full charge lasts up to 12 hours. Indoor use only. <script>alert(2)</script>', asset);
   must(await creator.call('POST', `/api/submissions/${A}/comments`, { revision: 1, text: 'PRIVATE-COMMENT-BODY' }));
 
   b = await launch(`${base}/#/workspace`, { port: 9371 });

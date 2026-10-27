@@ -29,6 +29,7 @@ import { acquireOwnership } from './lock.js';
 import { createOcr } from './ocr.js';
 import { createSemantic, createWorkerEmbedder } from './semantic.js';
 import { HttpError } from './util.js';
+import { runScenario, scenarioStatus, SCENARIO_FOOTPRINT_BYTES } from './scenario.js';
 
 export const ROOT_MARKER = '.brandproof-judge-root';
 const ROOT_KIND = 'brandproof-judge-demo-root';
@@ -124,10 +125,12 @@ async function prepareRoot(root) {
  * @param {object|null} [options.ocr]           shared reading service; undefined = default, null = off
  * @param {boolean} [options.ephemeral]         the demo root is on temporary storage (a free hosting tier): the page then says sessions are lost when the
  *                                              service restarts or sleeps
+ * @param {{ scenarioCall?: (n: number, method: string, path: string) => void }} [options.hooks]  a test seam: called before each request the optional evidence-change
+ *                                              scenario sends to the visitor's own app (a test throws from it to prove a failed set-up keeps the visitor's work). Nothing in the product sets it.
  * @param {() => Buffer} [options.idSource]     the 32 random bytes of a new session id. A test seam (to force a collision and test the rollback);
  *                                              the default is crypto.randomBytes and nothing in the product replaces it.
  */
-export async function createJudgeDemo({ root, allowedHosts = [], limits: limitsIn, secureCookie = false, clock = () => Date.now(), semantic, ocr, idSource = () => crypto.randomBytes(32), ephemeral = false } = {}) {
+export async function createJudgeDemo({ root, allowedHosts = [], limits: limitsIn, secureCookie = false, clock = () => Date.now(), semantic, ocr, idSource = () => crypto.randomBytes(32), ephemeral = false, hooks = {} } = {}) {
   if (!root || typeof root !== 'string') throw new Error('The judge demo needs its own root folder.');
   if (allowedHosts !== '*' && !(Array.isArray(allowedHosts) && allowedHosts.every((h) => typeof h === 'string'))) throw new Error('allowedHosts must be "*" or a list of host names.');
   const limits = normalizeLimits(limitsIn);
@@ -423,6 +426,52 @@ export async function createJudgeDemo({ root, allowedHosts = [], limits: limitsI
     });
   }
 
+  // ---------- the optional evidence-change scenario ----------
+  /**
+   * GET reports where this session is in the scenario (derived from its stored state). POST sets it up, if it is not already: it takes this
+   * session's write turn for the whole set-up (so two clicks or two tabs cannot run it twice, and nothing else writes in between), refuses before the
+   * first write if the session has no room, and sends every step to this visitor's own app through the real routes. A second run changes nothing.
+   * It only ever ADDS (a source, a campaign, one guideline version); it never resets or overwrites the visitor's work.
+   */
+  async function handleScenario(r, start, gone) {
+    let releaseWrite = () => {};
+    if (start) releaseWrite = await enterWrite(r);
+    let app;
+    try {
+      if (start && gone()) {
+        releaseWrite(); // the visitor left while waiting for the turn: hand it on (an early return skips the catch below)
+        return { cancelled: true };
+      }
+      app = await acquire(r);
+    } catch (e) {
+      releaseWrite();
+      throw e;
+    }
+    try {
+      let n = 0;
+      const call = async (method, pth, body, role = 'manager', raw = false) => {
+        hooks.scenarioCall?.(++n, method, pth);
+        return app.inject({ method, url: pth, role, body, raw });
+      };
+      const before = await scenarioStatus(call);
+      if (!start) return before;
+      if (before.started && before.ready) return { ...before, created: false };
+      const used = await sessionBytes(r);
+      if (used + SCENARIO_FOOTPRINT_BYTES > limits.sessionKiB * 1024) {
+        throw new HttpError(413, 'session_full', `This demo session's storage is too full to add the scenario (${(used / MIB).toFixed(1)} of ${(limits.sessionKiB / 1024).toFixed(1)} MB). Nothing was changed. Use “Reset my demo” to start again with fresh fictional data.`);
+      }
+      const made = await runScenario(call);
+      return { ...(await scenarioStatus(call)), created: made.created, steps: made.did.length };
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      console.error('Scenario set-up failed:', e);
+      throw new HttpError(500, 'scenario_failed', 'Setting up the scenario stopped part-way. Whatever was already added is kept and nothing of yours was changed; choose “Finish setting it up” to continue.');
+    } finally {
+      release(r);
+      releaseWrite();
+    }
+  }
+
   // ---------- requests ----------
   async function handle(req, res) {
     const send = (status, payload, type = 'application/json; charset=utf-8', extra = {}) => {
@@ -476,6 +525,11 @@ export async function createJudgeDemo({ root, allowedHosts = [], limits: limitsI
           await resetSession(r);
           touch(r);
           return send(200, { reset: true, expiresAt: new Date(expiresAtOf(r)).toISOString() }, undefined, { 'set-cookie': cookie });
+        }
+        if (p === '/api/judge/scenario') {
+          if (req.method !== 'GET' && req.method !== 'POST') throw new HttpError(405, 'method_not_allowed', 'Method not allowed.');
+          if (req.method === 'POST' && (req.headers.origin === undefined || !sameSite(req.headers.origin, host, local))) throw new HttpError(403, 'bad_origin', 'Cross-origin requests are not allowed.');
+          return send(200, await handleScenario(r, req.method === 'POST', () => res.destroyed), undefined, { 'set-cookie': cookie });
         }
         if (p.startsWith('/api/judge/')) throw new HttpError(404, 'not_found', 'No such API route.');
 

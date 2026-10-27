@@ -118,6 +118,28 @@ sessions/<sha256>/workspace.json  (+ .assets/<sha>.png, .lock)   the visitor's w
 
 The demo shares one text-matching service and one image-text reader across all visitors, if they are installed; they are optional and absent from a fresh extraction. Without them `/api/meta` says each is `unavailable` and why, the page says so, and the core path (add copy, rule checks against approved facts, explained findings, human decision, stale approval) works unchanged. The browser proof and the tests run with both switched off.
 
+## The optional evidence-change scenario (m24)
+
+An optional second way through the demo, separate from "Try it in three steps" and from "New submission", which are unchanged. Beside **+ New submission** in the workspace header a visitor sees an optional **Try an evidence change** button (it is not in the guide card, which keeps the size it was accepted at: on a 320 px phone the guide has only about 20 px of room within its two-thirds-of-the-screen budget). A dialog says what will be added; confirming adds, to that visitor's session only: one fictional fact sheet (version 1 approved, version 2 registered and left pending), one sample campaign approved against version 1, and links three of the demo brand's facts to the fact sheet (one new guidelines version). The visitor then does every step with the real features: Manager previews what version 2 would change (nothing is written), Manager activates it, the approval is stale and a new approval is refused, Manager relinks and corrects the facts, Creator corrects the copy and requests review, Reviewer approves, the dossier keeps both approvals with their evidence bindings.
+
+**How it works.** `src/scenario.js` holds the fictional texts and the steps. Each step is a request sent to the visitor's own app through `app.inject()`, an in-process path into the same route table, role checks, validation and approval gates as a request over HTTP (no extra port, no socket, nothing bypassed). So the stored state is exactly what the same clicks would have produced; nothing is a stored badge. Once it is started the guide shows one **Evidence change** strip, with the next step as a link whose label never repeats a page button's name, and it is refreshed after every saved change and every page. That "where you are" is derived from the stored state on every read: the source versions, the campaign's approval status and binding comparison, its findings and the evidence checks.
+
+| Route | What it does |
+|---|---|
+| `GET /api/judge/scenario` | Where this session is: `{ started: false }`, or `started`, `ready`, `stage`, `headline`, `next` (a label and an address; a suggestion, never an action). Read-only. |
+| `POST /api/judge/scenario` | Sets it up if it is not already; same-site browsers only (an `Origin` header that matches), like Reset. Takes this session's write turn for the whole set-up. |
+
+**Bounds and safety.**
+- Chosen by the cookie only (the same opaque session cookie as everything else); no id, owner value or other session is ever named. The same id number (`SRC-1`, `SUB-4`) in two sessions is two different records.
+- A start that is still waiting for its turn when its client disconnects hands the turn on without doing anything (m24b; a regression test holds the queue, disconnects it and proves the next write is answered).
+- Idempotent: two clicks, two tabs or a retry run it once (the second waits for the first's turn, then finds it done and changes nothing). It also resumes: if a set-up stops part-way (a failed write), the session keeps what was added, the guide says "only partly set up", and "Finish setting it up" completes it without duplicates.
+- It only ADDS. It never resets or overwrites the visitor's work: their campaigns, comments and images are kept (the tests compare them before and after). One visible consequence, stated in the dialog: the new guidelines version changes the evidence binding of every campaign, so an already approved sample such as the newsletter blurb shows "Re-review required" (the product's own rule; its history is untouched).
+- Refused BEFORE the first write, with a plain message and nothing changed, when the session's storage has no room for it (about 96 KiB is reserved; it adds far less), when the session has no room for the scenario's one small image (the session image count and bytes caps apply), or when the session already holds something that conflicts: a source with the scenario's title that is not the scenario's, or one of the three demo facts that was edited or linked to a source of the visitor's own. The scenario never overwrites those; "Reset my demo" starts again.
+- Per-session write queue, storage cap, admission and host/origin rules apply unchanged; starting it creates no session and uses no session slot. Reset removes it (with everything else); expiry removes it with the session.
+- The preloaded decision is labelled in its own note: "Sample history in the fictional scenario, not a decision you made." The demo roles are simulations, as everywhere in this demo.
+
+**Not done.** It is not a chatbot, uses no model and no network, and adds no accounts. It does not ingest documents, match assets or add shared collaboration (reserved for later rounds).
+
 ## Not done in this milestone
 
 No hosting provider setup or public address; no HTTPS termination (a proxy must do it); no per-address rate limiting, administration page or metrics; no cleanup of half-created folders; no stale-lock recovery for a replacement container's root marker; no isolation between visitors at the operating-system level.

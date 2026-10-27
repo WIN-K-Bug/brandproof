@@ -63,23 +63,28 @@ On a numeric fact: `conditions` (approved operating-condition phrases, for examp
 
 ## Measured on the synthetic corpus
 
-`npm run eval:claims` runs `tests/fixtures/claims-scope.json` (98 scored cases plus 11 documented known limits), written by the team against the fictional seed guidelines. Labels (`RULE:status` per case, the rules that may be reported supported, and the exact replacement texts allowed) were written from what a careful human would conclude. Result recorded 24 Oct 2026:
+`npm run eval:claims` runs `tests/fixtures/claims-scope.json` (143 scored cases plus 13 documented known limits; 98 and 11 before m25), written by the team against the fictional seed guidelines. Labels (`RULE:status` per case, the rules that may be reported supported, and the exact replacement texts allowed) were written from what a careful human would conclude. Result recorded 24 Oct 2026:
 
 | Group | Cases | Expected non-supported findings | TP | FP | FN |
 |---|---|---|---|---|---|
 | clean controls | 6 | 0 | 0 | 0 | 0 |
 | upper-bound wording | 11 | 6 | 6 | 0 | 0 |
 | guarantee / minimum | 7 | 9 | 9 | 0 | 0 |
-| operating conditions | 5 | 4 | 4 | 0 | 0 |
+| operating conditions | 6 | 5 | 5 | 0 | 0 |
 | competitor / other subject | 8 | 7 | 7 | 0 | 0 |
-| quotation / attribution | 8 | 8 | 8 | 0 | 0 |
+| quotation / attribution | 9 | 9 | 9 | 0 | 0 |
 | negation | 2 | 2 | 2 | 0 | 0 |
 | safe vs advice-only correction | 12 | 13 | 13 | 0 | 0 |
 | mixed (unsupported + contradicted + supported) | 3 | 6 | 6 | 0 | 0 |
 | denied directives ("Do not advertise…", "Never say…") | 13 | 13 | 13 | 0 | 0 |
 | retired or disowned figures ("old… incorrect", "used to be…") | 12 | 12 | 12 | 0 | 0 |
 | controls beside them (affirmative rewrite, qualified claim, near-miss wording, denial + affirmative in one text) | 11 | 6 | 6 | 0 | 0 |
-| **total** | **98** | **86** | **86** | **0** | **0** |
+| other subject, explicit (m25) | 12 | 12 | 12 | 0 | 0 |
+| same subject or none named: controls (m25) | 12 | 0 | 0 | 0 | 0 |
+| editing instructions and examples (m25) | 7 | 7 | 7 | 0 | 0 |
+| ordinary copy with the same verbs: controls (m25) | 6 | 2 | 2 | 0 | 0 |
+| unquantified endurance and its controls (m25) | 6 | 4 | 4 | 0 | 0 |
+| **total** | **143** | **113** | **113** | **0** | **0** |
 
 Also: 0 false-support or missing-support mismatches; 0 replacement-text mismatches; **13 cases offered a rewrite, each rewrite was applied and the text re-checked: none broke** (every contradiction of a rewritten fact disappeared and no new non-supported finding appeared).
 
@@ -89,17 +94,67 @@ Read this honestly:
 - Two labels were corrected after the first run because my first label was wrong about the design, not because the output was fitted: "other brands … the Aurora Lamp **runs** up to 12 hours" is reported as a different-clause caution (the word *runs* alone is not a topic word of the fact), and "competitors claim 30 hours but the Aurora Lamp lasts 30 hours" is a caution for both figures (the attribution window reaches the neighbouring clause), so no rewrite is offered. Both are the conservative outcome and both are documented behaviour.
 - The distinction between *unsupported / needs review* and *contradicted* is part of the labels (for example "guaranteed 30 hours" is both an unverified claim and a contradicted figure, with no replacement).
 
-## Known limits (11 documented cases, not scored)
+## Subject and intent (m25)
+
+An independent first challenge against the published build (16 predeclared, AI-authored synthetic cases; not a real-world accuracy set) found five breaches, all reproduced here before any change (`handoffs/evidence/m25-FIRST-RUN-challenge-v1-before.json`):
+
+1. **False support, three times.** "Our phone battery lasts up to 12 hours at medium brightness.", "The museum audio guide battery lasts up to 12 hours…" and "The office printer includes a 2-year warranty." were shown as **supported** by the lamp's facts. The checks needed only a topic word ("battery", "warranty") and a matching figure in one clause; nothing tied the fact to the sentence's subject. (The competitor rule only knew a few words such as "competitor" and "other brands".)
+2. **An unsafe rewrite.** "Please delete the sentence: Aurora Lamp battery lasts 30 hours." was a **contradiction** (a blocking error) with an offered automatic replacement "up to 12 hours at medium brightness", turning an instruction to delete a claim into an instruction to publish one.
+3. **A coverage miss.** "Aurora Lamp keeps shining continuously from breakfast until midnight without needing a charge." produced no finding.
+
+### The policy (two gates and a short bounded list; the subject gate was made positive in m25b)
+
+Both gates sit in front of every verdict about a numeric or yes/no fact, for the text and for a person's confirmed image transcription alike. What they cannot place goes to **needs review** (a warning a person must acknowledge), with **advice only**: never supported, never contradicted, never rewritten.
+
+**Intent.** A sentence that is an editing instruction ("delete / remove / rewrite / replace … the sentence / claim / line / figure …", "this line should be removed", an instruction in the sentence just before that points forward: "the next sentence", "below"), or that disowns itself as an example, placeholder, fictional, made-up or hypothetical text ("example claim", "placeholder copy", "fictional"), is not asserting the figure. The explanation says so, and the advice says to read it and carry out the instruction if that is what it is. Verbs alone do not trigger it ("Fix your sleep", "Cut the cord", "Change the way you read", "Replace your desk lamp with the Aurora Lamp" are still ordinary copy): there must be a piece of text as the object.
+
+**Subject (positive scope, m25b).** The approved data already says what the facts are about: the naming rules (the preferred product names, their listed misspellings, and the noun a product name ends in, here "lamp") and the words of the fact itself (its label, statement, source quote, topic, unit and condition words). A sentence is read as about the approved product only when its words **say so or say nothing about any subject**; every other word in the subject position makes the subject **unknown**, and an unknown subject goes to a person. The first version of this gate (m25) looked for particular shapes (a verb from a short list, the words before the topic noun) and was bypassed by an unlisted verb ("Printers flaunt a 2-year warranty.") and by a product name inside a possessive phrase about another device ("Aurora Lamp owners' phone battery lasts…"), both found by the independent review. The rule is now:
+- A word is **accounted for** when it is ordinary wording (determiners, prepositions, conjunctions, pronouns, adverbs, auxiliaries, the usual verbs that attach a figure to a subject, and ordinary descriptive, quantity and purpose words such as "new", "single", "designed"), wording about how strongly a figure is claimed (guaranteed, exactly, always, at least, up to, might…, which the guarantee, exactness, qualifier and hedge gates already judge), a word the approved fact itself uses, or part of the product's or the company's name. **Anything else is unknown, whatever part of speech it is**: an unfamiliar verb is as unknown as an unfamiliar noun.
+- Which words stand for the subject: when the fact's first topic term in the clause is itself a verb ("The Aurora Lamp **lasts** …") or is followed by a verb ("a full charge **lasts** …"), the phrase it ends, back to its determiner (whatever introduced it belongs to another thought: "We tell readers a full charge lasts …"), plus a clause-initial prepositional adjunct ("On the brightest setting a full charge lasts …"). Otherwise everything before the figure ("Printers flaunt a …", "Phones flaunt battery life of …", "Phone cases for Aurora Lamp battery …"). After the figure, the phrase around a topic noun ("12 hours of phone battery") and "on / in / for / from / inside / within / aboard the …" phrases.
+- **The product's name settles only the words it governs.** A stretch that names the product is about the product when nothing unknown stands between the name and the claim; only the words immediately before the name, back to its determiner, are excused as describing it ("our new reading lamp"). So the name never blesses a possessive phrase about something else: in "Aurora Lamp owners' phone battery", "Aurora Lamp Pro battery" and "The Aurora Lamp's companion phone battery", the words after the name are unknown. The company name alone does not make another product the lamp ("Fernlight phone battery" is still a phone).
+Wording that names no subject at all and uses only accounted-for words ("A full charge lasts up to 12 hours", "Includes a 2-year warranty", "Enjoy up to 12 hours of battery", "Designed for indoor use only") is the **justified bare campaign statement** and is read as about the campaign's own product, as before. The price is that **an unfamiliar word anywhere in the subject position is a caution even when the sentence is about the lamp** ("Flaunt a 2-year warranty.", "The Aurora Lamp flaunts a 2-year warranty.", "Our new reading light battery lasts…"): see the limits.
+
+**A workspace that declares no product name** (no naming rule besides the company name) has no subject to compare with: the subject gate stays off there, and the behaviour is the previous one. The intent gate does not depend on it.
+
+**Unquantified endurance (bounded).** A sentence about a duration fact (a unit in hours, days…) that promises endurance with no figure and names the fact's topic noun ("battery", "charge"; not a topic verb such as "lasts") is needs review when its wording is on a short closed list: continuously, non-stop, round the clock, all day / night / week, day and night, days on end, forever, endless, never runs out, without needing / requiring a charge, without recharging, until / till midnight / morning / evening / night / bedtime / dawn / dusk / sunrise / sunset, from <word> until / till / to <one of those>. It is not a paraphrase detector: other ways of saying it are still missed (see the limits).
+
+Order of the gates for a figure: negation → competitor words → **editing note** → attribution → denied or retired wording (all as before) → **subject** → the qualifier, guarantee, condition and rewrite rules (as before). The existing gates keep their explanations; the new ones apply only where those did not already send the sentence to a person.
+
+### Intentional policy changes, and what they cost
+
+- A claim about a different subject is **no longer a contradiction** of the lamp's fact either: "Our phone battery lasts 30 hours." used to be a blocking error with an offered rewrite to the lamp's wording, and is now needs review. Likewise "The printer is waterproof." (a lamp fact says the lamp is not).
+- An editing instruction about a claim is a **warning**, not a blocking error.
+- **False caution is the price.** Anything with an explicit subject word the approved data does not use now goes to a person, including sentences that are in fact about the lamp: "Our new reading light battery lasts up to 12 hours" ("light" is not the product noun here), "On the brightest setting a full charge lasts up to 12 hours" (a determiner-led phrase before the figure is read as a possible subject; it was already a documented limit and is now a caution), "Maria's lab measured a full charge at 30 hours." (correctly: not our claim). A person who reads such a finding can acknowledge it and approve; the advice says what to check.
+- **m25b widens that cost on purpose.** Unfamiliar words before a yes/no phrase in the same clause now make the subject unknown too: "Warm light for indoor use only." is a caution ("warm" and "light" are not accounted for), and so is markup in front of the phrase (the dossier browser check's fixture text had to put its markup in a sentence of its own for that reason; its assertions did not change). The alternative, trusting any sentence that merely contains a product word or an unfamiliar verb, is the false green the review found.
+- A rule that fires on a word needs the word: an unlisted verb after a bare subject ("Printers flaunt a 2-year warranty.") is **not** caught (a documented limit, below).
+
+### What this does not cover (documented limits, scored separately, not promises)
+
+Subjects given in another language or in a phrase far from the figure; "…, courtesy of the phone" after the figure (no determiner phrase of the listed kind); a product named only by a word the approved data does not use; endurance wording outside the closed list ("keeps going and going"); an instruction written in another language or an unusual form; any sentence where the subject is implied by an earlier sentence. The corpus lists four new limits (`tests/fixtures/claims-scope.json`, `known-limit`), including one over-caution.
+
+**Residual after m25b (each is a case in the corpus, `known-limit`):** a subject in an earlier clause of the same sentence ("The phone, like the Aurora Lamp, lasts up to 12 hours…": the clause that carries the figure names no subject); a matrix subject before the claim's own phrase ("Phones tell readers a full charge lasts…": what introduces the phrase is read as another thought); **spelled-out numbers** ("A two-year warranty comes with every scanner." produces no finding: the figure parser reads digits only, so the sentence is never compared; a pre-existing limit, not a tiny safe fix because the unit is hyphenated and the subject follows the figure); and the **false cautions** that positive scope buys: an unfamiliar opening verb ("Flaunt a 2-year warranty.") and an unfamiliar verb after the product's name ("The Aurora Lamp flaunts a 2-year warranty.") are cautions, where a person reads and acknowledges them.
+
+### If this is not enough: explicit scope on the fact (proposal, not built)
+
+The smallest compatible extension is an optional per-fact list of subjects ("scope": ["Aurora Lamp", "lamp"]) in the guideline library, validated like the other optional fact fields. A fact without it keeps the behaviour above (the vocabulary derived from the naming rules and the fact's own words), so every existing guideline set stays valid and nothing is rewritten. It would let a library name exactly what a fact covers (and stop the brand-name or descriptive-word cases above) without any change to the checker's shape. Not implemented: it needs a library editor field, a migration note and its own tests.
+
+### Evidence
+
+- Reproduction of the first challenge before the change and after: `handoffs/evidence/m25-FIRST-RUN-challenge-v1-before.json` (5 breaches: 3 false support, 1 unsafe rewrite, 1 coverage miss) and `m25-run7-challenge-v1.json` (0). **Fixes made against that table are not evidence of generalisation**; a separately authored post-fix challenge is the next step.
+- `tests/claims-applicability.test.js` (15 tests): the 16 predeclared cases as a table with their breach rules, the subject and intent cases above with positive controls, mixed sentences, the seeded campaigns, the legacy fallback, the transcription path, order independence, the endurance list, and the effect through the API (no blocking error, a warning that must be acknowledged, the person can still decide).
+- The synthetic claims corpus grew from 109 to 156 cases (143 scored; 13 known limits): `m25-run10-eval-claims.txt`. Written by the implementer alongside the fix: a regression baseline over our own sentences, not accuracy.
+
+## Known limits (13 documented cases, not scored)
 
 These still behave as listed (`npm run eval:claims` prints them as "not handled"):
 
 - Number words and paraphrases: "thirty hours", "a day and a half" are not read as figures.
-- Condition wording outside the recorded words: "on the brightest setting", "in power-saving mode" (only the recorded `conditionTerms` signal a condition; "brightest" is not "brightness").
-- Attribution without one of the listed verbs ("Maria's lab measured … 30 hours"), or further than three clauses before or one after the figure.
+- Condition wording outside the recorded words: "in power-saving mode" ("on the brightest setting" is now a caution through the subject gate, m25) (only the recorded `conditionTerms` signal a condition; "brightest" is not "brightness").
+- Attribution without one of the listed verbs ("Maria's lab measured … 30 hours" is now a caution through the subject gate, m25), or further than three clauses before or one after the figure.
 - A guarantee or "always" in a different clause than the figure ("up to 12 hours, always") does not change a within-limit "up to" figure (it does block an automatic rewrite).
 - Conservative false cautions are expected: any mention of a condition word without the approved wording in the same sentence, a word such as "reviewers" or "others" in the figure's own clause, and plain figures at or below the limit all go to review rather than green.
 - Denied and retired wording is a bounded list (see above): unlisted phrasings are missed (3 recorded cases) and some innocent sentences are over-cautioned (2 recorded cases).
-- Subject detection is a short word list (competitor, rival, other brands/lamps/products, their, others). It cannot tell whose product a pronoun-free sentence is about.
+- Subject detection is a short word list (competitor, rival, other brands/lamps/products, their, others). It cannot tell whose product a pronoun-free sentence is about. From m25 an explicit subject the approved data does not know is also caught; see "Subject and intent" above for what that does and does not cover.
 
 ## Tests
 

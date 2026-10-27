@@ -417,7 +417,7 @@ details.group > summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
 .filter:active { transform: translate(3px, 3px); box-shadow: none; }
 .filter[aria-pressed="true"] { background: var(--walnut); color: var(--cream); }
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 28px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 20px; margin-bottom: 28px; }
 .tile { padding: 16px 18px; }
 .tile .n { font: 400 2.5rem/1.05 var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .tile .l { color: var(--muted); font: 700 0.75rem/1.4 var(--mono); letter-spacing: 0.04em; }
@@ -452,7 +452,11 @@ dialog #ack { width: 1.5rem; height: 1.5rem; margin: 0; flex: none; }
 /* ---------- reflow: only a deliberate scroller (tabs, tables, the navigation row) may scroll sideways, never the page ---------- */
 /* A single-column grid sizes its column to its widest content (a <select> holding a long campaign title, one unbroken word);
    minmax(0, 1fr) lets the column shrink to the screen instead, and long words then wrap. */
-.stack, .ws-head, .ws > .col, .field { grid-template-columns: minmax(0, 1fr); }
+.stack, .ws-head, .ws > .col, .field, .finding, .evidence, .source { grid-template-columns: minmax(0, 1fr); }
+/* m23: a finding card, its exhibit and its source were single-column grids too, so one wide line (a chip, a heading, the typed-source note) at 200% text pushed the whole card past the screen. */
+.finding h3, .finding p, .evidence-none, .prov, .source { overflow-wrap: anywhere; }
+/* A key/value list keeps its 120px label column on wide screens; where the card is too narrow for both columns (a 320px phone at large text, 200% zoom on a phone) the value goes under its label. */
+@media (max-width: 360px) { .kv { grid-template-columns: minmax(0, 1fr); gap: 2px 14px; } .kv dd { margin-bottom: 8px; } }
 main, .topbar, .demo-banner, dialog { overflow-wrap: break-word; }
 .ws-title h1, .row > h1, .row > h2, .card-h h2, .card-h h3 { min-width: 0; }
 /* A flex item cannot shrink below its content unless told it may: the submission selector lists long titles, so it and its row must. */
@@ -655,6 +659,12 @@ mark.hl.cited { background: var(--sage-pale); color: var(--walnut); font-weight:
 .jg-steps li strong { display: block; }
 .jg-hint { display: block; font-size: 0.875rem; line-height: 1.35; }
 .jg-fiction { margin: 0; font-weight: 700; }
+/* The optional evidence-change row: the question or the next step on one side, its one action on the other; it stacks on a phone. */
+.jg-scenario { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; background: var(--paper); border: 2px dashed var(--walnut); }
+.jg-scenario[hidden] { display: none; }
+.jg-scenario-text { flex: 1 1 14rem; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.jg-scenario .btn { flex: 0 0 auto; max-width: 100%; }
+.jg-role { font-weight: 700; }
 .jg-more > summary { cursor: pointer; font-weight: 800; min-height: 44px; display: flex; align-items: center; }
 .jg-more[open] > summary { margin-bottom: 4px; }
 .jg-more-body { padding: 4px 0 2px; }

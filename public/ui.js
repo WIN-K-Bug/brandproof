@@ -54,6 +54,8 @@ export async function api(method, path, body, signal) {
     if (res.status === 401 && e?.code === 'session_unavailable') state.onSessionEnded?.();
     throw Object.assign(new Error(e?.message || res.statusText), { status: res.status, code: e?.code, details: e?.details });
   }
+  // A change was saved: let the page know (the judge demo's optional scenario line re-reads where the session stands).
+  if (method !== 'GET' && method !== 'HEAD') queueMicrotask(() => state.afterWrite?.());
   return data;
 }
 
