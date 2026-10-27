@@ -136,14 +136,27 @@ export function tabList({ label, idBase, tabs, selected, onSelect }) {
 export function toast(message, kind = '') {
   // Errors are announced immediately (role=alert); other messages politely (role=status).
   const t = h('div', { class: `toast ${kind}`, role: kind === 'err' ? 'alert' : 'status' }, message);
-  document.getElementById('toasts').append(t);
+  // A modal dialog sits above #toasts and makes the page behind it inert, so a message about the dialog's own action would be neither seen nor announced there: it goes inside the open dialog.
+  const open = kind === 'err' ? document.querySelector('dialog[open]') : null;
+  (open ? dialogToasts(open) : document.getElementById('toasts')).append(t);
   setTimeout(() => t.remove(), kind === 'err' ? 8000 : 4500);
+}
+
+function dialogToasts(dlg) {
+  let host = dlg.querySelector('.dlg-t');
+  if (!host) {
+    host = h('div', { class: 'dlg-t' });
+    dlg.querySelector('.dlg-b').after(host);
+  }
+  return host;
 }
 
 export function openDialog({ title, content, actions = [], wide = false }) {
   const dlg = h('dialog', { 'aria-labelledby': 'dlg-title' });
   const opener = document.activeElement; // focus goes back here when the dialog closes
   const close = () => {
+    // a message still showing when the dialog goes (e.g. the action failed and closed) moves to the page instead of vanishing with it
+    for (const t of dlg.querySelectorAll('.dlg-t .toast')) document.getElementById('toasts').append(t);
     dlg.close(); // the browser restores focus to the opener if it is still on the page
     dlg.remove();
     // If the action rebuilt the page the opener is gone: land on the page heading instead of losing focus.

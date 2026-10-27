@@ -122,7 +122,7 @@ try {
   check('the Approve button in the dialog is reachable', (await b.tabTo(`(e) => e && e.tagName === 'BUTTON' && e.classList.contains('primary') && e.closest('dialog')`, { max: 12 })) >= 0);
   await b.key('Enter');
   await b.wait(500);
-  const err = await b.eval(`[...document.querySelectorAll('#toasts .toast')].map((t) => t.getAttribute('role') + ':' + t.innerText).join(' | ')`);
+  const err = await b.eval(`[...document.querySelectorAll('.toast')].map((t) => t.getAttribute('role') + ':' + t.innerText).join(' | ')`);
   check('an error is announced assertively (role=alert) when approval needs acknowledgement', /alert:.*(Tick the box|confirm)/i.test(err), err.slice(0, 80));
   check('and the dialog stays open so nothing is lost', await b.eval(`!!document.querySelector('dialog[open]')`));
   // return to the checkbox, tick with Space, approve with Enter

@@ -432,12 +432,19 @@ details.group > summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
 .sticky-save { position: sticky; top: 0; z-index: 5; }
 
 /* ---------- dialog / toast ---------- */
-dialog { border: 4px solid var(--walnut); border-radius: 0; padding: 0; width: min(680px, calc(100vw - 32px)); background: var(--paper); box-shadow: var(--shadow-float); color: var(--text); }
+dialog { border: 4px solid var(--walnut); border-radius: 0; padding: 0; width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); background: var(--paper); box-shadow: var(--shadow-float); color: var(--text); }
+/* m28: the dialog is a column of header / body / footer that fits the screen. ONLY the body scrolls (the header and the actions stay in view), so a short window never gets a second, competing scrollbar or a scrolled-away blank area. */
+dialog[open] { display: flex; flex-direction: column; }
 dialog::backdrop { background: rgba(43, 29, 21, 0.62); }
-dialog .dlg-h { padding: 14px 20px; border-bottom: 3px solid var(--walnut); display: flex; align-items: center; gap: 10px; }
+dialog .dlg-h { flex: none; padding: 14px 20px; border-bottom: 3px solid var(--walnut); display: flex; align-items: center; gap: 10px; }
 dialog .dlg-h h2 { margin-right: auto; font-size: 1.3rem; }
-dialog .dlg-b { padding: 20px; display: grid; gap: 16px; max-height: min(70vh, 640px); overflow: auto; }
-dialog .dlg-f { padding: 14px 20px; border-top: 3px solid var(--walnut); display: flex; justify-content: flex-end; gap: 14px; flex-wrap: wrap; background: var(--raised); }
+/* position: relative keeps absolutely placed things inside the body (the table caption of the impact preview is .sr-only): otherwise they sit in the dialog's own scroll area, far below the text, and make the dialog scroll into an empty page. */
+dialog .dlg-b { padding: 20px; display: grid; gap: 16px; flex: 1 1 auto; min-height: 6rem; max-height: 640px; overflow: auto; overscroll-behavior: contain; position: relative; }
+/* a refusal or error raised while a dialog is open (the page behind is inert and under the dialog) is shown in the dialog, above the actions */
+dialog .dlg-t { flex: none; display: grid; gap: 8px; padding: 10px 20px; border-top: 3px solid var(--walnut); background: var(--raised); }
+dialog .dlg-t:empty { display: none; }
+dialog .dlg-t .toast { box-shadow: none; }
+dialog .dlg-f { flex: none; padding: 14px 20px; border-top: 3px solid var(--walnut); display: flex; justify-content: flex-end; gap: 14px; flex-wrap: wrap; background: var(--raised); }
 dialog ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 /* the warning acknowledgement before an approval: an amber slip, the box ticked on purpose */
 dialog .field.inline:has(#ack) { align-items: flex-start; padding: 14px 16px; background: var(--amber); border: 3px solid var(--walnut); }
@@ -521,8 +528,7 @@ main, .topbar, .demo-banner, dialog { overflow-wrap: break-word; }
   .nav a[aria-current="page"] .count { background: var(--walnut); color: var(--cream); }
   #toasts { right: 12px; left: 12px; max-width: none; bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
   /* a dialog becomes a sheet rising from the bottom edge */
-  dialog { width: 100%; max-width: 100%; margin: auto 0 0; border-width: 4px 0 0; box-shadow: 0 -8px 0 var(--amber); }
-  dialog .dlg-b { max-height: min(62vh, 640px); }
+  dialog { width: 100%; max-width: 100%; max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); margin: auto 0 0; border-width: 4px 0 0; box-shadow: 0 -8px 0 var(--amber); }
   .ws-title h1 { flex: 1 1 100%; }
 }
 /* The narrowest phones: a label never breaks inside a word ("Workspace" is the longest), so the tab bar tightens its letters instead. */

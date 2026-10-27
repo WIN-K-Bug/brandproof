@@ -1,4 +1,4 @@
-// Builds the PUBLICATION CANDIDATE: a clean folder (dist/public-candidate-m27/brandproof) and archive (dist/brandproof-public-candidate-m27.zip) of
+// Builds the PUBLICATION CANDIDATE: a clean folder (dist/public-candidate-m28/brandproof) and archive (dist/brandproof-public-candidate-m28.zip) of
 // exactly the files that would become public, from an explicit allow-list, then scans every file and fails if it finds anything that must not be
 // public: runtime data, locks, credentials, caches, installed packages, development evidence and handoffs, e-mail addresses, this computer's
 // paths or user name. It writes an inventory with a SHA-256 per file beside the folder. It only writes local files under dist/: it does not
@@ -12,10 +12,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
-const outDir = path.join(dist, 'public-candidate-m27', 'brandproof');
-const zipPath = path.join(dist, 'brandproof-public-candidate-m27.zip');
-const inventoryPath = path.join(dist, 'public-candidate-m27', 'INVENTORY.json');
-const inventoryTxt = path.join(dist, 'public-candidate-m27', 'INVENTORY.sha256.txt');
+const outDir = path.join(dist, 'public-candidate-m28', 'brandproof');
+const zipPath = path.join(dist, 'brandproof-public-candidate-m28.zip');
+const inventoryPath = path.join(dist, 'public-candidate-m28', 'INVENTORY.json');
+const inventoryTxt = path.join(dist, 'public-candidate-m28', 'INVENTORY.sha256.txt');
 
 // What may become public. Anything not listed here is not packaged.
 const INCLUDE = ['src', 'public', 'scripts', 'tests', 'docs', 'server.js', 'package.json', 'package-lock.json', 'README.md', '.gitignore', '.node-version', 'render.yaml'];
@@ -77,8 +77,8 @@ if (problems.length) {
 }
 
 // ---- build the folder (only our own output folder is ever removed) ----
-if (path.resolve(outDir) !== path.resolve(root, 'dist', 'public-candidate-m27', 'brandproof')) throw new Error('unexpected output folder');
-rmSync(path.join(dist, 'public-candidate-m27'), { recursive: true, force: true });
+if (path.resolve(outDir) !== path.resolve(root, 'dist', 'public-candidate-m28', 'brandproof')) throw new Error('unexpected output folder');
+rmSync(path.join(dist, 'public-candidate-m28'), { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 for (const f of picked) {
   const dest = path.join(outDir, f);

@@ -145,6 +145,12 @@ export async function launch(url, { width = 1360, height = 900, port = 9333 } = 
       await send('Emulation.setEmulatedMedia', { features: list });
       await api.wait(300);
     },
+    /** A real mouse-wheel turn at (x, y), the way a person scrolls (deltaY in pixels, positive scrolls down). */
+    async wheel(x, y, deltaY) {
+      const r = await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });
+      if (r.error) throw new Error('wheel: ' + JSON.stringify(r.error));
+      await api.wait(250);
+    },
     async viewport(width, height, mobile = false) {
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
       await api.wait(400);
