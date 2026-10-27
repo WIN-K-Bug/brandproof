@@ -16,7 +16,8 @@
  * image bytes, other campaigns, comment bodies, the model cache.
  */
 import { canonical, sha256 } from './util.js';
-import { currentVersion, evaluate, deriveWorkflow, bindingFor, bindingDiff, contentHash, assetHash, guidelineHash, evidenceFor, STATUS_LABELS } from './service.js';
+import { currentVersion, evaluate, deriveWorkflow, bindingFor, bindingDiff, contentHash, assetHash, guidelineHash, evidenceFor, receiptViews, MAX_COMPARED_RECEIPTS, STATUS_LABELS } from './service.js';
+import { RECEIPT_FORMAT } from './receipt.js';
 import { decorateFindings, findSource, versionState, SOURCE_LIMITS } from './sources.js';
 import { CHECKER_REVISION } from './checks.js';
 import { describeImage } from './assets.js';
@@ -194,8 +195,10 @@ export function buildDossier(state, id, { integrity, now, mode }) {
 
   const decisions = sub.events.filter((e) => statusWord[e.type]);
   const last = decisions.filter((e) => e.revision === head.n).at(-1) ?? decisions.at(-1) ?? null;
+  const views = receiptViews(state, sub, binding);
   const events = sub.events.slice(-MAX_EVENTS).map((e) => {
     const reasons = e.binding ? bindingDiff(e.binding, binding) : null;
+    const view = views.get(e.id);
     return {
       id: e.id,
       type: e.type,
@@ -205,6 +208,8 @@ export function buildDossier(state, id, { integrity, now, mode }) {
       at: e.at,
       binding: e.binding ?? null,
       bindingComparedWithCurrentInputs: reasons ? { matches: reasons.length === 0, differs: reasons } : null,
+      // Decisions only. The full receipt is included for the most recent ones; an older one is still marked recorded, with a note that this file leaves it out.
+      ...(view ? { ...view, ...(e.receipt && view.receiptComparison ? { receipt: e.receipt } : {}), ...(e.receipt && !view.receiptComparison ? { receiptNote: `A receipt was recorded. This file includes the receipts of the ${MAX_COMPARED_RECEIPTS} most recent decisions only.` } : {}) } : {}),
     };
   });
 
@@ -276,7 +281,13 @@ export function buildDossier(state, id, { integrity, now, mode }) {
     },
     recordedEvents: {
       kind: 'RECORDED',
-      note: 'Stored when each event happened. Each decision carries the hashes of the content, image details, guideline version and evidence it covered. The findings the person saw at that time were NOT stored and are not reconstructed here.',
+      note: 'Stored when each event happened. Each decision carries the hashes of the content, image details, guideline version and evidence it covered. Decisions saved since receipts were introduced also carry a RECEIPT: the findings the server computed at that moment, recorded in the same write and never changed. For a decision recorded before that, the findings the person saw were NOT stored and are not reconstructed here.',
+      receipts: {
+        formatVersion: RECEIPT_FORMAT,
+        recorded: decisions.filter((e) => e.type !== 'review_requested' && e.receipt).length,
+        unavailable: decisions.filter((e) => e.type !== 'review_requested' && !e.receipt).length,
+        note: 'Each receipt is a compact, server-computed record (short quotes and passage coordinates, capped in size), not a copy of the document. The comparison beside it is recomputed now from the exact revision the decision covered; it is a separate, labelled computation and never edits the receipt.',
+      },
       truncated: sub.events.length > MAX_EVENTS,
       events,
     },
@@ -293,7 +304,8 @@ export function buildDossier(state, id, { integrity, now, mode }) {
     limitations: [
       'Not a compliance certificate, legal review, signature or tamper-proof record, and not permission to publish. An approval applies only while the saved inputs it covered are unchanged.',
       'Text in the image is covered only as far as a person transcribed and confirmed it. An automatic reading is a draft and can be wrong; it is never source evidence and never approved by itself.',
-      'Findings are recomputed by deterministic rules today. They can miss paraphrased claims, and they are not what a reviewer saw when deciding.',
+      'Findings are recomputed by deterministic rules today. They can miss paraphrased claims, and they are not what a reviewer saw when deciding. What a reviewer saw is only what a decision RECEIPT records, and only for decisions saved since receipts existed.',
+      'A receipt records what the rules reported at the moment of the decision. It does not show that the copy was true, that the reviewer read it, or who they were (in demo mode actors are role labels), and it is not a certificate. The file checksum detects accidental change only.',
       'Source full texts, image bytes, other campaigns, comment bodies, credentials and file paths are not included. Excerpts are the exact cited passages only.',
       'The checksum covers every other field of this file. It detects accidental changes only: anyone can recompute it, so it does not prove who produced the file, which build produced it, or that nothing was altered.',
       'Data in this workspace is stored unencrypted on one computer.',

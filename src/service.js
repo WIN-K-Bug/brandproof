@@ -4,7 +4,8 @@
  * Read functions take committed state. Approval eligibility is always derived here, on the server.
  */
 import { HttpError, canonical, sha256 } from './util.js';
-import { runChecks, splitSentences } from './checks.js';
+import { runChecks, splitSentences, CHECKER_REVISION } from './checks.js';
+import { buildReceipt, compareReceipt } from './receipt.js';
 import { describeEngine } from './ai.js';
 import { diffText } from './diff.js';
 import { assignIds, highestIds } from './validate.js';
@@ -350,8 +351,9 @@ function assertExpected(expected, binding) {
   );
 }
 
-function recordEvent(d, sub, type, { revision, role, actor, note, binding, now }) {
-  const e = { id: `E-${++d.seq.event}`, type, revision, actor: actorOf(role, actor), note: note || '', binding, at: now };
+function recordEvent(d, sub, type, { revision, role, actor, note, binding, receipt, now }) {
+  // `receipt` exists only on a human decision and only when the server built it inside this same transaction (see decide); every other event keeps its earlier shape.
+  const e = { id: `E-${++d.seq.event}`, type, revision, actor: actorOf(role, actor), note: note || '', binding, ...(receipt ? { receipt } : {}), at: now };
   sub.events.push(e);
   return e;
 }
@@ -380,14 +382,57 @@ export function decide(d, { id, decision, revision, expected, note, acknowledgeW
   const version = currentVersion(d);
   const evidence = evidenceFor(d);
   assertExpected(expected, bindingFor(h, version, evidence.hash));
-  const wf = deriveWorkflow(sub, version, evaluate(h, version), role, actor, evidence);
+  const evaluation = evaluate(h, version);
+  const wf = deriveWorkflow(sub, version, evaluation, role, actor, evidence);
   const g = wf.eligibility[decision === 'approved' ? 'approve' : 'reject'];
   need(g.allowed, 403, 'not_allowed', g.reasons.join(' '), { reasons: g.reasons });
   if (decision === 'approved' && g.requiresAcknowledgement) {
     need(acknowledgeWarnings === true, 422, 'acknowledgement_required', `This revision has ${g.warningCount} warning(s). Confirm you have reviewed them to approve.`, { warningCount: g.warningCount });
   }
-  return recordEvent(d, sub, decision, { revision: h.n, role, actor, note, binding: wf.binding, now });
+  // Every gate has passed. The receipt is computed from the SAME evaluation, evidence and binding that just allowed this decision, and is saved in the same write:
+  // nothing from the request body reaches it, and a refused decision (any throw above) never gets this far.
+  decorateFindings(evaluation.findings, d);
+  const receipt = buildReceipt({ evaluation, evidence, acknowledgedWarnings: decision === 'approved' && g.requiresAcknowledgement ? true : false, imageTextConfirmed: Boolean(h.imageText) });
+  return recordEvent(d, sub, decision, { revision: h.n, role, actor, note, binding: wf.binding, receipt, now });
 }
+
+// ---------- decision receipts: read side ----------
+
+export const RECEIPT_UNAVAILABLE_NOTE = 'This decision was recorded before decision-time receipts existed, so the findings the person saw were not stored and are not reconstructed here. Only the bindings recorded with it are available.';
+/** Comparing means re-running the rules on a revision, so only the most recent receipts are compared on each read. */
+export const MAX_COMPARED_RECEIPTS = 12;
+
+/**
+ * For every human decision of a campaign: is a receipt recorded, and how does it compare with today's recomputation? Computed on read from the committed state,
+ * never stored: the stored receipt is never touched. headBinding is the binding of the latest saved inputs.
+ */
+export function receiptViews(state, sub, headBinding) {
+  const version = currentVersion(state);
+  const evidence = evidenceFor(state);
+  const headRevision = head(sub).n;
+  const decided = sub.events.filter((e) => e.type === 'approved' || e.type === 'rejected');
+  const comparable = new Set(decided.filter((e) => e.receipt).slice(-MAX_COMPARED_RECEIPTS).map((e) => e.id));
+  const nowByRevision = new Map();
+  const nowFor = (n) => {
+    if (!nowByRevision.has(n)) {
+      const rev = sub.revisions.find((r) => r.n === n);
+      const ev = evaluate(rev, version);
+      decorateFindings(ev.findings, state);
+      nowByRevision.set(n, { findings: ev.findings, summary: ev.summary, evidenceEntries: evidence.entries, guidelineVersion: version.version, checkerRevision: CHECKER_REVISION });
+    }
+    return nowByRevision.get(n);
+  };
+  const views = new Map();
+  for (const e of decided) {
+    if (!e.receipt) views.set(e.id, { receiptStatus: 'unavailable', receiptNote: RECEIPT_UNAVAILABLE_NOTE });
+    else if (comparable.has(e.id) && sub.revisions.some((r) => r.n === e.revision)) {
+      views.set(e.id, { receiptStatus: 'recorded', receiptComparison: compareReceipt(e.receipt, nowFor(e.revision), { revision: e.revision, headRevision, type: e.type, bindingDiffers: bindingDiff(e.binding, headBinding), guidelineVersionThen: e.binding.guidelineVersion }) });
+    } else views.set(e.id, { receiptStatus: 'recorded', receiptComparison: null, receiptComparisonNote: `Not compared: only the ${MAX_COMPARED_RECEIPTS} most recent receipts are compared with today.` });
+  }
+  return views;
+}
+
+export const withReceiptViews = (events, views) => events.map((e) => (views.has(e.id) ? { ...e, ...views.get(e.id) } : e));
 
 // ---------- reads ----------
 
@@ -438,7 +483,7 @@ export function describeSubmission(state, id, role, viewer = null) {
       summary: evaluate(r, version).summary,
     })),
     comments: sub.comments,
-    events: sub.events,
+    events: withReceiptViews(sub.events, receiptViews(state, sub, wf.binding)),
     current: {
       revision: h.n,
       guidelineVersion: version.version,

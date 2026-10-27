@@ -623,6 +623,22 @@ mark.hl.cited { background: var(--sage-pale); color: var(--walnut); font-weight:
 .dossier-finding { display: grid; gap: 4px; }
 .dossier .mono { overflow-wrap: anywhere; }
 @media (max-width: 640px) { .dossier-dl { grid-template-columns: 1fr; } }
+/* Decision receipts: the recorded side and the recomputed side, one column so they reflow on a phone; a native disclosure in the history. */
+.receipt { margin-top: 8px; border: 2px solid var(--walnut); background: var(--paper); }
+.receipt > summary { cursor: pointer; font-weight: 800; min-height: 44px; display: flex; align-items: center; padding: 6px 12px; overflow-wrap: anywhere; }
+.receipt[open] > summary { border-bottom: 2px solid var(--walnut); }
+.receipt .receipt-body { padding: 12px; }
+.receipt-body { display: grid; gap: 14px; min-width: 0; }
+.receipt-body .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.receipt-findings { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.receipt-findings li { display: grid; gap: 2px; overflow-wrap: anywhere; }
+.receipt-now { border-top: 2px dashed var(--walnut); padding-top: 12px; }
+.receipt-line { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.receipt-changes { margin: 0; padding-left: 22px; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.receipt-item { border-top: 2px solid var(--walnut); padding-top: 12px; }
+.receipt-h { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.receipt-section-h { margin: 8px 0 0; font-size: 1.05rem; }
+.receipt-unavailable { margin: 6px 0 0; }
 @media print {
   .sidebar, #banner, .topbar, .no-print, #toasts, #dialogs, .judge-guide { display: none !important; }
   body, .app, main { background: #fff !important; color: #000; }

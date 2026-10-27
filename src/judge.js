@@ -30,6 +30,7 @@ import { createOcr } from './ocr.js';
 import { createSemantic, createWorkerEmbedder } from './semantic.js';
 import { HttpError } from './util.js';
 import { runScenario, scenarioStatus, SCENARIO_FOOTPRINT_BYTES } from './scenario.js';
+import { RECEIPT_MAX_BYTES } from './receipt.js';
 
 export const ROOT_MARKER = '.brandproof-judge-root';
 const ROOT_KIND = 'brandproof-judge-demo-root';
@@ -37,6 +38,7 @@ const SESSION_FILE = 'session.json';
 const SESSION_KIND = 'brandproof-judge-session';
 const WORKSPACE = 'workspace.json';
 const HASH = /^[0-9a-f]{64}$/;
+const DECISION_ROUTE = /^\/api\/submissions\/[^/]+\/(approve|reject)$/u;
 const COOKIE_VALUE = /^[A-Za-z0-9_-]{43}$/; // 32 random bytes, base64url
 const MIB = 1024 * 1024;
 
@@ -540,7 +542,8 @@ export async function createJudgeDemo({ root, allowedHosts = [], limits: limitsI
           releaseWrite = await enterWrite(r);
           try {
             if (res.destroyed) return releaseWrite(); // the visitor went away while waiting for its turn
-            const incoming = Number(req.headers['content-length']) || 0;
+            // A decision's own body is tiny, but the server adds a decision-time receipt to the workspace file: room for the largest one is reserved first, so a receipt can never take a session past its cap.
+            const incoming = (Number(req.headers['content-length']) || 0) + (req.method === 'POST' && DECISION_ROUTE.test(p) ? RECEIPT_MAX_BYTES : 0);
             const used = await sessionBytes(r);
             if (used + incoming > limits.sessionKiB * 1024) {
               throw new HttpError(413, 'session_full', `This demo session's storage is full (${(used / MIB).toFixed(1)} of ${(limits.sessionKiB / 1024).toFixed(1)} MB). Use “Reset my demo” to start again with fresh fictional data.`);

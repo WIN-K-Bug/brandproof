@@ -1,4 +1,5 @@
 import { h, clear, api, describeError, toast, fmtTime, short, STATUS_LABEL } from './ui.js';
+import { receiptBody } from './receipt.js';
 
 // Review dossier: a readable, printable report of ONE campaign's saved state, plus an explicit JSON download.
 // Everything is added as text nodes. Nothing is sent anywhere: the download is built in the browser from what the
@@ -116,6 +117,11 @@ export async function renderDossier(root, id) {
             ? h('div', { class: 'table-wrap' }, h('table', { class: 'table' }, h('caption', { class: 'sr-only' }, 'Recorded review events'), h('thead', null, h('tr', null, ['When', 'Event', 'Who', 'Revision', 'Bound to', 'Against the saved inputs now'].map((t) => h('th', { scope: 'col' }, t)))), h('tbody', null, d.recordedEvents.events.map((e) => h('tr', null, h('td', { class: 'small' }, fmtTime(e.at)), h('td', null, e.type.replaceAll('_', ' '), e.note ? h('div', { class: 'small muted' }, `Note: ${e.note}`) : null), h('td', { class: 'small' }, actorText(e.actor)), h('td', null, e.revision ?? ''), h('td', { class: 'small mono' }, e.binding ? `content ${short(e.binding.contentHash)}… image ${short(e.binding.assetHash)}… guidelines v${e.binding.guidelineVersion} ${short(e.binding.guidelineHash)}… evidence ${short(e.binding.evidenceHash ?? '')}…` : '—'), h('td', null, e.bindingComparedWithCurrentInputs ? (e.bindingComparedWithCurrentInputs.matches ? 'Still matches' : `Differs: ${e.bindingComparedWithCurrentInputs.differs.join(', ')} changed`) : '—'))))))
             : h('p', { class: 'muted' }, 'No review has been requested or decided.'),
           d.recordedEvents.truncated ? h('p', { class: 'small muted' }, 'Only the most recent events are listed.') : null,
+          h('h3', { class: 'receipt-section-h', id: 'dz-receipts' }, 'Decision receipts: recorded then, recomputed now'),
+          h('p', { class: 'small muted' }, `${d.recordedEvents.receipts.recorded} recorded, ${d.recordedEvents.receipts.unavailable} not recorded (made before receipts existed). ${d.recordedEvents.receipts.note}`),
+          d.recordedEvents.events.some((e) => e.receiptStatus)
+            ? d.recordedEvents.events.filter((e) => e.receiptStatus).map((e) => h('div', { class: 'receipt-item stack' }, h('h4', { class: 'receipt-h' }, `${e.type === 'approved' ? 'Approved' : 'Rejected'} on revision ${e.revision}`, h('span', { class: 'muted small' }, ` ${e.id} by ${actorText(e.actor)}, ${fmtTime(e.at)}`)), receiptBody(e)))
+            : h('p', { class: 'muted' }, 'No decision has been recorded yet.'),
         ),
       ),
 

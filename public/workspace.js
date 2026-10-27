@@ -1,5 +1,6 @@
 import { h, clear, api, apiUpload, focusMainHeading, tabList, describeError, toast, openDialog, fmtTime, short, statusChip, findingChip, roleLabel, roleChip, isAuthed, field, debounce, sha256Hex, state, STATUS_LABEL } from './ui.js';
 import { scenarioEntry } from './judge.js';
+import { receiptDisclosure } from './receipt.js';
 
 const switchHint = (what) => (isAuthed() ? `Your role cannot ${what}.` : `Switch to the Creator or Manager demo role to ${what}.`);
 
@@ -1315,6 +1316,7 @@ function historyPanel() {
             h('div', { class: 'muted small' }, fmtTime(e.at)),
             e.note ? h('div', { class: 'small' }, e.note) : null,
             e.type === 'approved' ? h('div', { class: 'muted small mono' }, `bound to guidelines v${e.binding.guidelineVersion} · copy ${short(e.binding.contentHash)} · image ${short(e.binding.assetHash)}`) : null,
+            receiptDisclosure(e),
           ),
         ),
       );

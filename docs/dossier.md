@@ -53,8 +53,27 @@ Each is recomputed independently in `tests/dossier.test.js`.
 
 **Fingerprint note.** An image details record may hold a "browser-reported fingerprint". For a *retained* image the app copies the server's digest into it, and the dossier says whether it still equals the server-computed digest (a difference would be reported, not hidden; the server refuses to save one). Only a legacy **metadata-only** record says the image itself was not held and cannot be checked.
 
-## Checker revision
+## Decision receipts (m27)
 
+A decision used to store only bindings (hashes of what it covered). Since m27 every **successful human approve or reject** also stores a **receipt**: the server's compact record of what the rules reported for the saved copy at that moment, written in the same single save as the decision.
+
+**What is stored** (`event.receipt`, format 1): the checker revision; the rule engine (deterministic rules, no generative review); counts of ALL findings by severity and status; up to 16 findings, most serious first (rule id, field, status, severity, title, explanation, a short quote of the copy, the span, and for a registered source its id, version, passage coordinates and state at that time); up to 16 registered-evidence entries (entry, source version, passage, text digest, state); the rule ids that were not checked; whether the reviewer acknowledged warnings (true only when the gate required it and it was given). Strings are capped (title 120, explanation 240, quote 100 characters, cited quote 80), what was left out is counted (`omittedFindings`, `omittedEntries`), and the whole receipt is held under 32 KiB as written to the workspace file (`trimmed: true` if the limit forced detail out). Typical receipts are 1 to 4 KiB.
+
+**What is not stored**: the document or any image, a source's full text, comments, credentials, or anything the browser sent. The request body has no way to reach it: `decide()` builds it from the evaluation that just allowed the decision, and a decision that is refused (wrong role, self-approval, stale view, blocking finding, missing acknowledgement, no note) writes nothing at all.
+
+**Immutable**: no route edits or deletes an event. Later guideline, source or checker changes never touch a stored receipt.
+
+**Recorded then versus recomputed now** (computed on read, never stored, labelled RECOMPUTED in the page): for each of the 12 most recent receipts, today's rules and registered evidence are applied to **exactly the revision the decision covered** and compared by finding id: counts then and now, findings that changed severity or status, findings no longer reported, findings new today (only when the receipt kept every finding it saw), evidence entries whose source version is now replaced, withdrawn or relinked, whether the rules were revised, the guideline version then and now, which bindings differ from the latest saved inputs, and `appliesNow` (an approval of the latest revision whose bindings all still match). `receiptStatus` is `recorded` or `unavailable`.
+
+**Older decisions**: a decision recorded before receipts existed has no receipt. It is labelled `unavailable` ("recorded before decision-time receipts existed ... not reconstructed"), is never back-filled, and has no comparison. The bindings stored with it still compare as before.
+
+**Compatibility**: additive. `formatVersion` stays **3** because no v3 field changed; `recordedEvents.receipts` (`formatVersion`, `recorded`, `unavailable`, a note) and per-event `receipt`, `receiptStatus`, `receiptComparison`, `receiptNote` are new optional fields. The dossier file includes full receipts for the 12 most recent decisions and marks older ones `recorded` with a note. The workspace `schemaVersion` stays 1; an older build reading a newer file ignores the extra field.
+
+**Public demo**: a decision reserves room for the largest possible receipt (32 KiB) before it is accepted, so a receipt cannot take a session past its storage cap; at the cap the usual `session_full` message appears and nothing is written.
+
+**Not claimed**: a receipt is not a compliance certificate, legal review, signature, proof of who decided (in demo mode actors are role labels), or evidence that the reviewer read the findings, and it says nothing about the truth of the copy. The optional model-based source matching is a separate, relevance-only feature and is never part of a receipt.
+
+## Checker revision
 `snapshot.engine.checkerRevision` (for example `rules-2026.10.24-denied-context`) is a **hand-maintained label** bumped by the authors when the rules change in a way that can change findings. It is not derived from the code, not a build identity or signature, and a forgotten bump is possible; otherwise the rules are unversioned. The dossier says so. `formatVersion` is 3 (version 1 files lacked `hashMethods` and the checker revision; version 2 lacked the `imageText` block and `hashMethods.imageTextHash`).
 
 ## Checksum
@@ -70,7 +89,7 @@ Browser, `npm run ui-smoke-dossier` (authenticated mode, synthetic accounts, fic
 ## Limits
 
 - Current campaign only. Older revisions appear as digests, not text; no mass export, no sharing, no PDF.
-- Historic findings are not reconstructed (they were never stored).
+- Historic findings are not reconstructed. Decisions recorded before receipts existed never stored them and stay labelled unavailable; only decisions saved since m27 carry a receipt, and a receipt records the (capped) findings the rules reported, not the whole document.
 - A downloaded file is a point-in-time copy and can be out of date immediately; it is only as trustworthy as the workspace it came from (unencrypted local storage, demo roles or local accounts).
 - The image integrity is checked when the dossier is built; the bytes themselves are not included.
 - The checksum is not a signature.

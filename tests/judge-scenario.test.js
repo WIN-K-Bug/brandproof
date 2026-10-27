@@ -263,7 +263,13 @@ test('starting keeps the visitor\'s own work: their campaign, comment and the sa
   assert.deepEqual(mineAfter.events, mineBefore.events);
   const sampleAfter = (await v.as('reviewer')('GET', '/api/submissions/SUB-2')).json;
   assert.deepEqual(sampleAfter.revisions, sample.revisions);
-  assert.deepEqual(sampleAfter.events, sample.events, 'no event was added to or removed from the sample history');
+  // m27: a decision's receipt is stored data and must not change; its comparison with TODAY is computed on read and moves with the guidelines, by design.
+  const stored = (events) => events.map(({ receiptComparison, ...rest }) => rest);
+  assert.deepEqual(stored(sampleAfter.events), stored(sample.events), 'no event was added to or removed from the sample history');
+  const approvedNow = sampleAfter.events.find((e) => e.type === 'approved');
+  assert.equal(approvedNow.receiptStatus, 'recorded');
+  assert.equal(approvedNow.receiptComparison.appliesNow, false, 'the comparison with today reflects the new guidelines');
+  assert.deepEqual(approvedNow.receipt, sample.events.find((e) => e.type === 'approved').receipt, 'the recorded receipt is exactly what it was');
   // the guidelines changed (a new version links the facts), so an already approved sample says re-review: that is the product rule, and it is the only change
   assert.equal(sampleAfter.workflow.status, 'approval_stale');
   assert.ok(!sampleAfter.workflow.staleApproval.reasons.includes('content'));
