@@ -17,6 +17,9 @@ const BASE_PAGES = [
 ];
 const pages = () => (state.user?.owner ? [...BASE_PAGES, ['people', 'People']] : BASE_PAGES);
 
+// A visitor who arrived from another site passes through /?entry=1 (src/judge.js): show the clean address again.
+if (location.search === '?entry=1') history.replaceState(null, '', '/' + location.hash);
+
 const main = document.getElementById('main');
 let renderToken = 0;
 

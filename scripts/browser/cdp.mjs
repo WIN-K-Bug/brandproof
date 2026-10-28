@@ -19,11 +19,12 @@ export function findBrowser() {
   return CANDIDATES.find((p) => existsSync(p));
 }
 
-export async function launch(url, { width = 1360, height = 900, port = 9333 } = {}) {
-  const edge = findBrowser();
+// `args` adds browser flags (m30 diagnostics: a private window, host mapping, a trusted test certificate); `exe` picks another Chromium-based browser.
+export async function launch(url, { width = 1360, height = 900, port = 9333, args = [], exe } = {}) {
+  const edge = exe ?? findBrowser();
   if (!edge) throw new Error('No Edge/Chrome found. Set BRANDPROOF_BROWSER to a browser executable.');
   const profile = mkdtempSync(path.join(os.tmpdir(), 'bp-edge-'));
-  const proc = spawn(edge, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, `--window-size=${width},${height}`, 'about:blank'], { stdio: 'ignore' });
+  const proc = spawn(edge, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, `--window-size=${width},${height}`, ...args, 'about:blank'], { stdio: 'ignore' });
   let targets;
   for (let i = 0; i < 50; i++) {
     try {
@@ -38,12 +39,15 @@ export async function launch(url, { width = 1360, height = 900, port = 9333 } = 
   let id = 0;
   const pending = new Map();
   const consoleMsgs = [];
+  const listeners = [];
   ws.onmessage = (m) => {
     const d = JSON.parse(m.data);
     if (d.id && pending.has(d.id)) {
       pending.get(d.id)(d);
       pending.delete(d.id);
-    } else if (d.method === 'Runtime.consoleAPICalled') consoleMsgs.push(d.params.args.map((a) => a.value ?? a.description).join(' '));
+    } else if (d.method && listeners.length) listeners.forEach((fn) => fn(d.method, d.params));
+    if (d.id && !d.method) return;
+    if (d.method === 'Runtime.consoleAPICalled') consoleMsgs.push(d.params.args.map((a) => a.value ?? a.description).join(' '));
     else if (d.method === 'Runtime.exceptionThrown') consoleMsgs.push('EXCEPTION ' + (d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text));
     else if (d.method === 'Log.entryAdded') consoleMsgs.push(`LOG ${d.params.entry.level}: ${d.params.entry.text} ${d.params.entry.url ?? ''}`);
   };
@@ -58,6 +62,10 @@ export async function launch(url, { width = 1360, height = 900, port = 9333 } = 
   await send('Page.enable');
   const api = {
     consoleMsgs,
+    /** Raw protocol access and event subscription (m30: network and cookie diagnostics). */
+    send,
+    on: (fn) => listeners.push(fn),
+    profile,
     async goto(u) {
       await send('Page.navigate', { url: u });
       await new Promise((r) => setTimeout(r, 1200));

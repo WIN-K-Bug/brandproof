@@ -1,4 +1,4 @@
-// Builds the PUBLICATION CANDIDATE: a clean folder (dist/public-candidate-m29/brandproof) and archive (dist/brandproof-public-candidate-m29.zip) of
+// Builds the PUBLICATION CANDIDATE: a clean folder (dist/public-candidate-m31/brandproof) and archive (dist/brandproof-public-candidate-m31.zip) of
 // exactly the files that would become public, from an explicit allow-list, then scans every file and fails if it finds anything that must not be
 // public: runtime data, locks, credentials, caches, installed packages, development evidence and handoffs, e-mail addresses, this computer's
 // paths or user name. It writes an inventory with a SHA-256 per file beside the folder. It only writes local files under dist/: it does not
@@ -12,15 +12,15 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
-const outDir = path.join(dist, 'public-candidate-m29', 'brandproof');
-const zipPath = path.join(dist, 'brandproof-public-candidate-m29.zip');
-const inventoryPath = path.join(dist, 'public-candidate-m29', 'INVENTORY.json');
-const inventoryTxt = path.join(dist, 'public-candidate-m29', 'INVENTORY.sha256.txt');
+const outDir = path.join(dist, 'public-candidate-m31', 'brandproof');
+const zipPath = path.join(dist, 'brandproof-public-candidate-m31.zip');
+const inventoryPath = path.join(dist, 'public-candidate-m31', 'INVENTORY.json');
+const inventoryTxt = path.join(dist, 'public-candidate-m31', 'INVENTORY.sha256.txt');
 
 // What may become public. Anything not listed here is not packaged.
 const INCLUDE = ['src', 'public', 'scripts', 'tests', 'docs', 'server.js', 'package.json', 'package-lock.json', 'README.md', '.gitignore', '.node-version', 'render.yaml'];
 // Never packaged, wherever it appears. docs/evidence is development screenshots and run logs (replaced by a note); the rest is runtime or tooling state.
-const FORBIDDEN = /(^|\/)(node_modules|\.cache|data|demo-data|dist|\.git|\.claude|\.taste-skill|handoffs|evidence)(\/|$)|(^|\/)\.env|\.tmp$|\.lock$|\.lock\.takeover$|\.onnx$|\.pem$|\.key$|credentials|(^|\/)users\.json$|auth-workspace|\.assets(\/|$)|\.bak-|(^|\/)skills-lock\.json$|(^|\/)\.brandproof-judge-root$|(^|\/)root-owner/i;
+const FORBIDDEN = /(^|\/)(node_modules|\.cache|data|demo-data|dist|\.git|\.claude|\.taste-skill|handoffs|evidence)(\/|$)|(^|\/)\.env|\.tmp$|\.lock$|\.lock\.takeover$|\.onnx$|\.pem$|\.key$|\.crt$|\.cer$|\.pfx$|\.p12$|credentials|(^|\/)users\.json$|auth-workspace|\.assets(\/|$)|\.bak-|(^|\/)skills-lock\.json$|(^|\/)\.brandproof-judge-root$|(^|\/)root-owner/i;
 const EVIDENCE_NOTE = `# Development evidence is not part of this package
 
 Screenshots, inspector reports and run logs produced during development are not included in the public source. They were made on fictional,
@@ -34,7 +34,7 @@ const TEXT = /\.(js|mjs|cjs|json|md|html|css|txt|yaml|yml|svg)$/i;
 const RULES = [
   ['an e-mail address', /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(com|org|net|io|in|edu|gov|co|me|dev|app)\b/i, (f) => f === 'package-lock.json'],
   ['a path or name from the machine that built it', /E:[\\/]+web[ %]?proj|gpt_codex_proj|\bMary\b|kevin75108102|AppData[\\/]+Local[\\/]+Temp[\\/]+claude/, (f) => f === 'scripts/package-public.mjs'], // the scanner's own rule text is exempt
-  ['a private key or token', /BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20}|AKIA[0-9A-Z]{16}|xox[bp]-[A-Za-z0-9-]{10}/, () => false],
+  ['a private key, certificate or token', /BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)|ghp_[A-Za-z0-9]{20}|AKIA[0-9A-Z]{16}|xox[bp]-[A-Za-z0-9-]{10}/, () => false],
   ['a real password hash or session cookie', /scrypt\$[0-9]+\$[0-9]+\$[0-9]+\$[A-Za-z0-9_-]{20,}\$[A-Za-z0-9_-]{40,}|bp_session=[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{40,}/, () => false],
 ];
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -77,8 +77,8 @@ if (problems.length) {
 }
 
 // ---- build the folder (only our own output folder is ever removed) ----
-if (path.resolve(outDir) !== path.resolve(root, 'dist', 'public-candidate-m29', 'brandproof')) throw new Error('unexpected output folder');
-rmSync(path.join(dist, 'public-candidate-m29'), { recursive: true, force: true });
+if (path.resolve(outDir) !== path.resolve(root, 'dist', 'public-candidate-m31', 'brandproof')) throw new Error('unexpected output folder');
+rmSync(path.join(dist, 'public-candidate-m31'), { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 for (const f of picked) {
   const dest = path.join(outDir, f);

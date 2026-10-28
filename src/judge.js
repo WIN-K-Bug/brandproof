@@ -69,6 +69,17 @@ const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const SESSION_GONE = 'This demo session has ended or was not found. Reload the page to start a new demo session.';
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+/**
+ * A browser does not send a SameSite=Strict cookie on a navigation that starts on another site, nor on reloads of that page, so the server cannot tell
+ * such a visitor from a new one on that request. Starting a session there replaced the visitor's cookie and left their earlier session unreachable.
+ * So a cross-site top-level arrival that carries no valid cookie gets this constant landing page instead: no session, no cookie. Its script (enter.js)
+ * and, with scripts off, its meta refresh and link move on to this same address from the demo's own origin, where the cookie IS sent; the marker
+ * below is what keeps that second request from being answered with this page again (so there is no loop).
+ */
+const ENTRY_SEARCH = '?entry=1';
+const ENTRY_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Opening the demo · BrandProof</title><link rel="stylesheet" href="/styles.css"><noscript><meta http-equiv="refresh" content="0;url=/${ENTRY_SEARCH}"></noscript></head><body><main class="page-notice"><div class="notice" role="status"><h1>Opening the demo…</h1><p>The demo is opening from its own address so that it can find your session.</p><p><a class="btn primary" href="/${ENTRY_SEARCH}">Continue</a></p><p class="small">BrandProof judge demo. Everything here is fictional, and each visitor's session is kept separate.</p></div></main><script src="/enter.js"></script></body></html>`;
+const isCrossSiteEntry = (h) => h['sec-fetch-site'] === 'cross-site' && h['sec-fetch-mode'] === 'navigate' && h['sec-fetch-dest'] === 'document';
+
 /** A plain page for a visitor who cannot get a session (capacity, rate). Uses the app's own stylesheet; no script. */
 function noticePage(title, text) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)} · BrandProof</title><link rel="stylesheet" href="/styles.css"></head><body><main class="page-notice"><div class="notice warn" role="status"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(text)}</p><p class="small">BrandProof judge demo. Everything here is fictional, and each visitor's session is kept separate.</p></div></main></body></html>`;
@@ -577,6 +588,7 @@ export async function createJudgeDemo({ root, allowedHosts = [], limits: limitsI
         const c = readCookie(req);
         let r = lookup(c.value);
         let value = c.value;
+        if (!r && req.method === 'GET' && isCrossSiteEntry(req.headers) && url.search !== ENTRY_SEARCH) return send(200, ENTRY_PAGE, 'text/html; charset=utf-8');
         if (!r && req.method === 'GET') {
           const made = await createSession(c.present);
           r = made.record;
