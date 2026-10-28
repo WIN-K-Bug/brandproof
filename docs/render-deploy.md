@@ -39,7 +39,7 @@ Do **not** set `PORT` (Render sets it), `BRANDPROOF_HOST` (the deployment defaul
 
 ## Steps (a person performs these; each marked gate needs the user's authorization)
 
-1. **[Gate] Choose a licence and decide what is public** (see "Gates"). Build the package: `node scripts/package-public.mjs`. It writes `dist/public-candidate-m32b/brandproof/` (the folder), `dist/brandproof-public-candidate-m32b.zip` and a per-file hash inventory, and fails if anything it should not publish is found.
+1. **[Gate] Choose a licence and decide what is public** (see "Gates"). Build the package: `node scripts/package-public.mjs`. It writes `dist/public-candidate-m33/brandproof/` (the folder), `dist/brandproof-public-candidate-m33.zip` and a per-file hash inventory, and fails if anything it should not publish is found.
 2. **[Gate] Create a public repository** under the owner's account and put the **contents of that folder** at its root (the zip has the same layout). Compare the files with `INVENTORY.sha256.txt`. Nothing here initialises a repository or touches a remote.
 3. **[Gate] Create the Render service** from that repository (Blueprint from `render.yaml`, or a Web Service with the settings above). Render needs an account; the free plan needs no payment method on the documented terms, which Render may change. Keep auto-deploy off.
 4. **Enter `BRANDPROOF_ALLOWED_HOSTS`.** The host name exists only once the service does. Create it with your best guess (`brandproof-judge-demo.onrender.com`), read the real host name Render shows, and if it differs (Render adds a suffix when a name is taken) correct the variable and trigger a Manual Deploy. Until it is right, `/healthz` answers but every page gets a refusal naming the host rule.

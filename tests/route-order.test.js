@@ -41,7 +41,8 @@ function rig() {
     },
   };
   vm.createContext(sandbox);
-  vm.runInContext(`${ui}\n${fn}\nglobalThis.state = state;\nglobalThis.render = renderWorkspace;`, sandbox);
+  // renderWorkspace bumps the module's comparison counter (m33) when it commits a campaign page
+  vm.runInContext(`${ui}\nlet compareSeq = 0;\n${fn}\nglobalThis.state = state;\nglobalThis.render = renderWorkspace;`, sandbox);
   sandbox.paint = () => log.paints.push({ selected: sandbox.view.id, detail: sandbox.view.detail.id });
   const root = { scrollIntoView() {} };
   const go = (hash) => log.redirects.push(hash);

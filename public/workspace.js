@@ -25,6 +25,10 @@ const view = {
   route: 0, // the navigation (state.route) this page was last painted for: when state.route has moved on, the person is on another page
 };
 
+// Which comparison the person is waiting for. Every new choice, closing the comparison, starting an edit and every new paint of the campaign bump it,
+// so the answer to an older request is dropped instead of replacing what the person is looking at.
+let compareSeq = 0;
+
 // ---------- entry ----------
 
 export async function renderWorkspace(root, id, go) {
@@ -75,6 +79,7 @@ export async function renderWorkspace(root, id, go) {
   }
   view.detail = detail;
   view.route = state.route;
+  compareSeq++;
   paint();
 }
 
@@ -525,13 +530,21 @@ function imageTextCard() {
 // ---------- compare ----------
 
 async function openCompare(from, to) {
+  const seq = ++compareSeq; // the latest choice wins
+  const id = view.id; // the campaign this comparison is of
+  // Still wanted only while nothing newer was chosen or closed, this is still the same campaign and the person is still on this page.
+  const wanted = () => seq === compareSeq && view.id === id && view.route === state.route;
+  let c;
   try {
-    view.compare = await api('GET', `/api/submissions/${view.id}/compare?from=${from}&to=${to}`);
-    view.mode = 'compare';
-    paint();
+    c = await api('GET', `/api/submissions/${id}/compare?from=${from}&to=${to}`);
   } catch (e) {
-    toast(describeError(e), 'err');
+    if (wanted()) toast(describeError(e), 'err'); // a refusal for a comparison nobody is waiting for any more is not worth a message over another page
+    return;
   }
+  if (!wanted()) return;
+  view.compare = c;
+  view.mode = 'compare';
+  paint();
 }
 
 function miniFinding(f) {
@@ -549,7 +562,7 @@ function compareCard() {
   return h(
     'section',
     { class: 'card', 'aria-label': 'Revision comparison' },
-    h('div', { class: 'card-h' }, h('h2', null, `Revision ${c.from} → revision ${c.to}`), h('button', { class: 'btn small', type: 'button', onclick: () => ((view.mode = 'view'), paint()) }, 'Close comparison')),
+    h('div', { class: 'card-h' }, h('h2', null, `Revision ${c.from} → revision ${c.to}`), h('button', { class: 'btn small', type: 'button', onclick: () => (compareSeq++, (view.mode = 'view'), paint()) }, 'Close comparison')),
     h(
       'div',
       { class: 'card-b stack' },
@@ -566,6 +579,7 @@ function compareCard() {
 // ---------- editor ----------
 
 function startEdit(prefillFinding) {
+  compareSeq++; // a comparison still on its way must not replace the editor
   const rev = head();
   const im = view.detail.current.image;
   view.draft = {
