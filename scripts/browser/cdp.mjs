@@ -145,6 +145,12 @@ export async function launch(url, { width = 1360, height = 900, port = 9333 } = 
       await send('Emulation.setEmulatedMedia', { features: list });
       await api.wait(300);
     },
+    /** Type text into whatever has keyboard focus, the way the keyboard does (nothing happens if nothing editable is focused). */
+    async insertText(text) {
+      const r = await send('Input.insertText', { text });
+      if (r.error) throw new Error('insertText: ' + JSON.stringify(r.error));
+      await api.wait(200);
+    },
     /** A real mouse-wheel turn at (x, y), the way a person scrolls (deltaY in pixels, positive scrolls down). */
     async wheel(x, y, deltaY) {
       const r = await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });

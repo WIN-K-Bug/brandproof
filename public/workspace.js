@@ -65,8 +65,11 @@ export async function renderWorkspace(root, id, go) {
 }
 
 async function reload(detail) {
+  const id = view.id; // the campaign this reload is for; the person may move to another while the requests are out
   view.list = (await api('GET', '/api/submissions')).submissions;
-  view.detail = detail ?? (await api('GET', `/api/submissions/${encodeURIComponent(view.id)}`));
+  const fresh = detail ?? (await api('GET', `/api/submissions/${encodeURIComponent(id)}`));
+  if (view.id !== id || fresh.id !== id) return; // an answer for a campaign that is no longer the one on screen: never paint it over the current one
+  view.detail = fresh;
   paint();
 }
 
@@ -738,7 +741,7 @@ function editorCard() {
   // What the draft would save, said plainly. Re-rendered whenever the image state changes.
   const paintImage = () => {
     const im = dr.image;
-    save.disabled = im.uploading;
+    save.disabled = im.uploading || dr.saving;
     save.title = im.uploading ? 'Wait for the image upload to finish.' : '';
     clear(imageBox);
     if (im.uploading) imageBox.append(h('div', { class: 'notice info', role: 'status' }, 'Uploading and checking the image… Nothing has changed yet: the draft still uses its previous image until this succeeds.'));
@@ -999,7 +1002,7 @@ function editorCard() {
   drawRetained();
   paintImageText();
 
-  return h(
+  const card = h(
     'section',
     { class: 'card', 'aria-label': 'Edit campaign' },
     h('div', { class: 'card-h' }, h('h2', null, `Draft of revision ${dr.baseRevision + 1}`), h('span', { class: 'chip demo' }, 'unsaved'), cancel, save),
@@ -1038,10 +1041,23 @@ function editorCard() {
       h('p', { class: 'muted small' }, 'Only the colours you select here are compared with the palette and used for contrast. The findings update as you type.'),
     ),
   );
+  // While a save is in flight the form is locked (nothing typed after Save can be lost between sending and the answer) and Save cannot be pressed again.
+  const form = card.querySelector('.card-b.editor');
+  const saveLabel = 'Save as revision ' + (dr.baseRevision + 1);
+  dr.lock = (on) => {
+    form.inert = on;
+    cancel.disabled = on;
+    save.disabled = on || dr.image.uploading;
+    save.textContent = on ? 'Saving…' : saveLabel;
+    card.setAttribute('aria-busy', String(on));
+  };
+  if (dr.saving) dr.lock(true);
+  return card;
 }
 
 async function saveRevision() {
   const dr = view.draft;
+  if (!dr || dr.saving) return; // one save per draft at a time: a second press while the first is in flight sends nothing
   const it = dr.imageText;
   if (it.reading) return toast('Wait for the reading to finish or cancel it.', 'err');
   if (dr.asset.retainedSha256 && it.dirty && !it.confirmed) {
@@ -1049,11 +1065,22 @@ async function saveRevision() {
     document.getElementById('imagetext-confirm')?.focus();
     return;
   }
+  const id = view.id; // the campaign THIS draft belongs to: the answer can arrive after the person has moved to another one
+  dr.saving = true;
+  dr.lock?.(true);
   try {
     const body = { baseRevision: dr.baseRevision, text: dr.text, asset: dr.asset };
     // Only a person's explicit confirmation is sent. With nothing new to confirm the server carries the earlier one forward for the identical image, or none.
     if (dr.asset.retainedSha256 && it.dirty && it.confirmed) body.imageText = { text: it.text, draftId: it.draftId, confirmed: true };
-    const r = await api('POST', `/api/submissions/${view.id}/revisions`, body);
+    const r = await api('POST', `/api/submissions/${id}/revisions`, body);
+    if (view.id !== id || view.draft !== dr) {
+      // The person left this campaign while it saved. It IS saved on the server, but this is no longer its page: say so by name, bring the list up to date, and leave what they are doing alone.
+      toast(`Saved revision ${r.headRevision} of ${id}.`, 'ok');
+      // the refresh is best effort: the save is done, so a failure here must not be reported as a failed save
+      if (view.id === id && view.mode === 'view') await reload().catch(() => {});
+      else await api('GET', '/api/submissions').then((l) => (view.list = l.submissions)).catch(() => {});
+      return;
+    }
     toast(`Saved revision ${r.headRevision}.`, 'ok');
     view.mode = 'view';
     view.draft = null;
@@ -1061,8 +1088,17 @@ async function saveRevision() {
     await reload(r);
     focusMainHeading();
   } catch (e) {
+    if (view.id !== id || view.draft !== dr) {
+      // refused after the person had moved on: name the campaign, and do not talk about a draft that is no longer open
+      toast(`The save of ${id} was not made. ${describeError(e)}`, 'err');
+      return;
+    }
     toast(describeError(e), 'err');
     if (e.status === 409) toast('Your draft is still here. Copy it, reload, and re-apply.', 'err');
+  } finally {
+    dr.saving = false;
+    dr.lock?.(false);
+    if (view.draft === dr) document.querySelector('section[aria-label="Edit campaign"] .card-h .btn.primary')?.focus(); // still editing: keep the keyboard where it was
   }
 }
 

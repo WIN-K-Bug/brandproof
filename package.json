@@ -25,6 +25,7 @@
     "ui-smoke-dossier": "node scripts/browser/ui-smoke-dossier.mjs",
     "ui-smoke-receipts": "node scripts/browser/ui-smoke-receipts.mjs",
     "ui-smoke-dialog-reflow": "node scripts/browser/ui-smoke-dialog-reflow.mjs",
+    "ui-smoke-save-race": "node scripts/browser/ui-smoke-save-race.mjs",
     "ui-smoke-layout": "node scripts/browser/ui-smoke-layout.mjs",
     "ui-smoke-design": "node scripts/browser/ui-smoke-design.mjs",
     "ui-smoke-journey": "node scripts/browser/ui-smoke-journey.mjs",
