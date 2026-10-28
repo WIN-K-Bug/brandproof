@@ -1,4 +1,4 @@
-import { h, clear, api, describeError, toast, openDialog, fmtTime, short, field, state } from './ui.js';
+import { h, clear, api, routeStamp, describeError, toast, openDialog, fmtTime, short, field, state } from './ui.js';
 import { impactPanel } from './impact.js';
 
 const MAX_FILE_BYTES = 100 * 1024;
@@ -13,7 +13,9 @@ const isManager = () => state.role === 'manager';
 
 export async function renderSources(root, id, version, query, go) {
   if (id) return renderDetail(root, id, version, query, go);
+  const stale = routeStamp(); // an answer that arrives after the person has gone elsewhere is dropped
   const { sources, evidence } = await api('GET', '/api/sources');
+  if (stale()) return;
   const paint = () => renderSources(root, null, null, null, go);
   clear(root).append(
     h(
@@ -64,10 +66,12 @@ export async function renderSources(root, id, version, query, go) {
 // ---------- detail + viewer ----------
 
 async function renderDetail(root, id, versionArg, query, go) {
+  const stale = routeStamp();
   let data;
   try {
     data = await api('GET', `/api/sources/${encodeURIComponent(id)}`);
   } catch (e) {
+    if (stale()) return;
     clear(root).append(h('div', { class: 'notice err' }, describeError(e)));
     return;
   }
@@ -76,6 +80,7 @@ async function renderDetail(root, id, versionArg, query, go) {
   const vmeta = s.versions.find((v) => v.n === n);
   const paint = () => renderSources(root, id, n, query, go);
   const full = vmeta ? (await api('GET', `/api/sources/${encodeURIComponent(id)}/versions/${n}`)).version : null;
+  if (stale()) return;
   const params = new URLSearchParams(query || '');
   const hl = params.has('start') ? { start: Number(params.get('start')), end: Number(params.get('end')) } : null;
 

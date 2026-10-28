@@ -1,4 +1,4 @@
-import { h, clear, api, tabList, describeError, toast, openDialog, fmtTime, short, field, state, isAuthed } from './ui.js';
+import { h, clear, api, routeStamp, tabList, describeError, toast, openDialog, fmtTime, short, field, state, isAuthed } from './ui.js';
 import { selectionIn } from './sources.js';
 
 const lib = { current: null, draft: null, original: '', tab: 'terms', versions: null, sources: null, root: null };
@@ -7,15 +7,21 @@ const canEdit = () => state.role === 'manager';
 const dirty = () => lib.draft && JSON.stringify(lib.draft) !== lib.original;
 
 export async function renderLibrary(root) {
+  const stale = routeStamp(); // answers that arrive after the person has gone elsewhere are dropped
   lib.root = root;
   const data = await api('GET', '/api/guidelines');
+  if (stale()) return;
   if (!lib.current || lib.current.version !== data.version || !dirty()) {
     lib.draft = structuredClone(data.guidelines);
     lib.original = JSON.stringify(lib.draft);
   }
   lib.current = data;
-  lib.versions = (await api('GET', '/api/guidelines/versions')).versions;
-  lib.sources = await api('GET', '/api/sources');
+  const versions = (await api('GET', '/api/guidelines/versions')).versions;
+  if (stale()) return;
+  const sources = await api('GET', '/api/sources');
+  if (stale()) return;
+  lib.versions = versions;
+  lib.sources = sources;
   paint();
 }
 

@@ -1,4 +1,4 @@
-import { h, clear, api, describeError, toast, fmtTime, short, STATUS_LABEL } from './ui.js';
+import { h, clear, api, routeStamp, describeError, toast, fmtTime, short, STATUS_LABEL } from './ui.js';
 import { receiptBody } from './receipt.js';
 
 // Review dossier: a readable, printable report of ONE campaign's saved state, plus an explicit JSON download.
@@ -30,13 +30,16 @@ export function saveSnapshot(d) {
 }
 
 export async function renderDossier(root, id) {
+  const stale = routeStamp(); // an answer that arrives after the person has gone elsewhere is dropped
   let d;
   try {
     d = await api('GET', `/api/submissions/${encodeURIComponent(id)}/dossier`);
   } catch (e) {
+    if (stale()) return;
     clear(root).append(h('div', { class: 'stack' }, h('a', { href: '#/workspace', class: 'small' }, '← Workspace'), h('div', { class: 'notice err', role: 'alert' }, describeError(e), ' ', h('button', { class: 'btn small', type: 'button', onclick: () => renderDossier(root, id) }, 'Try again'))));
     return;
   }
+  if (stale()) return;
   document.getElementById('crumb').textContent = `Review dossier / ${d.campaign.id}`;
   document.title = `Review dossier ${d.campaign.id} · BrandProof`;
   const c = d.status.counts;

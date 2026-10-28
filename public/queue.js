@@ -1,11 +1,13 @@
-import { h, clear, api, fmtTime, statusChip, STATUS_LABEL } from './ui.js';
+import { h, clear, api, routeStamp, fmtTime, statusChip, STATUS_LABEL } from './ui.js';
 
 let filter = 'all';
 const ORDER = { in_review: 0, approval_stale: 1, rejected: 2, draft: 3, approved: 4 };
 const REASON = { content: 'copy', asset: 'image', imagetext: 'image text', guideline: 'guidelines' };
 
 export async function renderQueue(root, go) {
+  const stale = routeStamp();
   const { submissions } = await api('GET', '/api/submissions');
+  if (stale()) return; // the person has gone elsewhere: do not paint over that page
   const paint = () => {
     const rows = submissions
       .filter((s) => filter === 'all' || s.status === filter)

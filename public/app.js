@@ -21,7 +21,6 @@ const pages = () => (state.user?.owner ? [...BASE_PAGES, ['people', 'People']] :
 if (location.search === '?entry=1') history.replaceState(null, '', '/' + location.hash);
 
 const main = document.getElementById('main');
-let renderToken = 0;
 
 function go(hash, replace = false) {
   if (replace) history.replaceState(null, '', hash);
@@ -50,13 +49,13 @@ function paintNav(page, queueCount) {
 async function route(opts = {}) {
   if (isAuthed() && !state.user) return showSignIn();
   const { page, arg, arg2, query } = parse();
-  const token = ++renderToken;
+  const token = ++state.route;
   const pageName = page === 'dossier' ? 'Review dossier' : pages().find(([id]) => id === page)[1];
   document.getElementById('crumb').textContent = pageName;
   document.title = `${pageName} · BrandProof`;
   try {
     const list = (await api('GET', '/api/submissions')).submissions;
-    if (token !== renderToken) return;
+    if (token !== state.route) return;
     paintNav(page === 'dossier' ? 'workspace' : page, list.filter((s) => s.status === 'in_review' || s.status === 'approval_stale').length || null);
     if (page === 'dossier') await renderDossier(main, arg);
     else if (page === 'workspace') await renderWorkspace(main, arg, go);
@@ -66,10 +65,10 @@ async function route(opts = {}) {
     else if (page === 'people') await renderPeople(main);
     else await renderInsights(main);
     // After navigating, put focus on the new page's heading so keyboard and screen-reader users start at the top of the content.
-    if (opts.focus && token === renderToken) focusMainHeading();
-    if (isJudge() && token === renderToken) void refreshScenario(); // where the optional evidence-change scenario stands, from the stored state
+    if (opts.focus && token === state.route) focusMainHeading();
+    if (isJudge() && token === state.route) void refreshScenario(); // where the optional evidence-change scenario stands, from the stored state
   } catch (e) {
-    if (token !== renderToken) return;
+    if (token !== state.route) return;
     if (state.sessionEnded) return; // the judge demo already replaced the page with its "session ended" state
     if (isAuthed() && e.status === 401) return signedOut('Your session ended. Please sign in again.');
     clear(main).append(h('div', { class: 'notice err' }, describeError(e)));

@@ -1,4 +1,4 @@
-import { h, clear, api, apiUpload, focusMainHeading, tabList, describeError, toast, openDialog, fmtTime, short, statusChip, findingChip, roleLabel, roleChip, isAuthed, field, debounce, sha256Hex, state, STATUS_LABEL } from './ui.js';
+import { h, clear, api, apiUpload, routeStamp, focusMainHeading, tabList, describeError, toast, openDialog, fmtTime, short, statusChip, findingChip, roleLabel, roleChip, isAuthed, field, debounce, sha256Hex, state, STATUS_LABEL } from './ui.js';
 import { scenarioEntry } from './judge.js';
 import { receiptDisclosure } from './receipt.js';
 
@@ -22,19 +22,44 @@ const view = {
   root: null,
   sideEl: null,
   go: null,
+  route: 0, // the navigation (state.route) this page was last painted for: when state.route has moved on, the person is on another page
 };
 
 // ---------- entry ----------
 
 export async function renderWorkspace(root, id, go) {
+  // The person can move on while these requests are out (another campaign, another page). An answer for a route that is no longer current is dropped:
+  // it must not paint, redirect, or change which campaign (view.id) and draft the page belongs to.
+  const stale = routeStamp();
   view.root = root;
   view.go = go;
-  view.list = (await api('GET', '/api/submissions')).submissions;
+  const list = (await api('GET', '/api/submissions')).submissions;
+  if (stale()) return;
+  view.list = list;
   if (!id) {
     const first = [...view.list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (first) return go(`#/workspace/${first.id}`, true);
     return paintEmpty();
   }
+  await refreshSemanticStatus();
+  if (stale()) return;
+  let detail;
+  try {
+    detail = await api('GET', `/api/submissions/${encodeURIComponent(id)}`);
+  } catch (e) {
+    if (stale()) return;
+    // A submission that is not here (an address from an earlier session, or a restarted demo) must not be a dead end: say why it may be missing and offer the way back.
+    if (e.status === 404) {
+      clear(root).append(h('div', { class: 'notice err', role: 'alert' }, describeError(e)), h('p', { class: 'muted' }, 'This address may be from an earlier session, or the submission may have been removed.'), h('div', { class: 'row' }, h('a', { class: 'btn primary', href: '#/workspace' }, 'Open the workspace')));
+      root.scrollIntoView?.({ block: 'start' }); // on a phone the guide fills the first screen: bring the message and the way back into view
+      return;
+    }
+    clear(root).append(h('div', { class: 'notice err' }, describeError(e)));
+    return;
+  }
+  if (stale()) return;
+  // The page changes campaign here, together with its detail. Until now it still showed (and could be editing) the previous campaign, so the
+  // campaign id, the draft and the matcher selection are switched at this point and never earlier.
   if (view.id !== id) {
     view.mode = 'view';
     view.draft = null;
@@ -48,29 +73,21 @@ export async function renderWorkspace(root, id, go) {
     sem.result = null;
     sem.note = '';
   }
-  await refreshSemanticStatus();
-  try {
-    view.detail = await api('GET', `/api/submissions/${encodeURIComponent(id)}`);
-  } catch (e) {
-    // A submission that is not here (an address from an earlier session, or a restarted demo) must not be a dead end: say why it may be missing and offer the way back.
-    if (e.status === 404) {
-      clear(root).append(h('div', { class: 'notice err', role: 'alert' }, describeError(e)), h('p', { class: 'muted' }, 'This address may be from an earlier session, or the submission may have been removed.'), h('div', { class: 'row' }, h('a', { class: 'btn primary', href: '#/workspace' }, 'Open the workspace')));
-      root.scrollIntoView?.({ block: 'start' }); // on a phone the guide fills the first screen: bring the message and the way back into view
-      return;
-    }
-    clear(root).append(h('div', { class: 'notice err' }, describeError(e)));
-    return;
-  }
+  view.detail = detail;
+  view.route = state.route;
   paint();
 }
 
+/** Refreshes the list and this campaign after an action. Returns true if it painted. The state is always brought up to date, but once the person has moved to another page nothing is painted over it. */
 async function reload(detail) {
   const id = view.id; // the campaign this reload is for; the person may move to another while the requests are out
   view.list = (await api('GET', '/api/submissions')).submissions;
   const fresh = detail ?? (await api('GET', `/api/submissions/${encodeURIComponent(id)}`));
-  if (view.id !== id || fresh.id !== id) return; // an answer for a campaign that is no longer the one on screen: never paint it over the current one
+  if (view.id !== id || fresh.id !== id) return false; // an answer for a campaign that is no longer the one on screen: never paint it over the current one
   view.detail = fresh;
+  if (view.route !== state.route) return false; // the person has gone to another page (the library, a dossier, a campaign still loading): that page keeps the screen
   paint();
+  return true;
 }
 
 function paintEmpty() {
@@ -1081,16 +1098,21 @@ async function saveRevision() {
       else await api('GET', '/api/submissions').then((l) => (view.list = l.submissions)).catch(() => {});
       return;
     }
-    toast(`Saved revision ${r.headRevision}.`, 'ok');
+    // Still this campaign and this draft, but the person may have gone to another page (the library, a dossier) while it saved: then say so by name.
+    toast(view.route === state.route ? `Saved revision ${r.headRevision}.` : `Saved revision ${r.headRevision} of ${id}.`, 'ok');
     view.mode = 'view';
     view.draft = null;
     view.active = null;
-    await reload(r);
-    focusMainHeading();
+    if (await reload(r)) focusMainHeading(); // only the page the person is on gets the focus
   } catch (e) {
     if (view.id !== id || view.draft !== dr) {
       // refused after the person had moved on: name the campaign, and do not talk about a draft that is no longer open
       toast(`The save of ${id} was not made. ${describeError(e)}`, 'err');
+      return;
+    }
+    if (view.route !== state.route) {
+      // refused while the person is on another page: name the campaign. The draft is kept, so it is there when they come back.
+      toast(`The save of ${id} was not made. ${describeError(e)}${e.status === 409 ? ' Your draft is kept: open the campaign again to copy it.' : ''}`, 'err');
       return;
     }
     toast(describeError(e), 'err');

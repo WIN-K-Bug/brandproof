@@ -1,6 +1,15 @@
 // Small DOM toolkit. Text is only ever added as text nodes, so server data cannot inject markup.
 
-export const state = { role: 'creator', meta: null, user: null, csrf: null };
+export const state = { role: 'creator', meta: null, user: null, csrf: null, route: 0 };
+
+/**
+ * Every navigation bumps state.route. A page renderer takes a stamp before its first request and asks it after each await: once the person has
+ * moved on, the answer is dropped instead of being painted over (or navigated away from) the page they are now on.
+ */
+export const routeStamp = () => {
+  const n = state.route;
+  return () => n !== state.route;
+};
 
 export const isAuthed = () => state.meta?.mode === 'authenticated';
 

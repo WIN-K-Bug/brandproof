@@ -1,9 +1,11 @@
-import { h, clear, api, STATUS_LABEL } from './ui.js';
+import { h, clear, api, routeStamp, STATUS_LABEL } from './ui.js';
 
 const KIND = { terminology: 'Terminology', fact: 'Approved fact', 'claim-substantiation': 'Unverified claim', style: 'Style', palette: 'Palette', contrast: 'Contrast', 'alt-text': 'Alt text' };
 
 export async function renderInsights(root) {
+  const stale = routeStamp();
   const i = await api('GET', '/api/insights');
+  if (stale()) return; // the person has gone elsewhere: do not paint over that page
   const max = Math.max(1, ...i.recurring.map((r) => r.occurrences));
   const tile = (n, l) => h('div', { class: 'card tile' }, h('div', { class: 'n' }, String(n)), h('div', { class: 'l' }, l));
   clear(root).append(
